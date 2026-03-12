@@ -6,6 +6,24 @@
 # if lef then just check all the keys
 # else check where it lies w.r.t to keys and go to subsequent child Nodeone
 # call change node to child node and iterate again
+
+# insert
+# understand helper function
+# write helper functons
+# do below steps using helper functions
+
+# use a while true loop
+# go to root  check if root is full
+# if yes split root
+#     then make new root
+# else check root is leaf
+#     if yes then add key, val
+#     else check which child
+#       if child is full
+#         split child taking cases if it is leaf or not
+#       else
+#         add key, value to child only if child is leaf else traverse
+import math
 class Node:
     def __init__(self, leaf=False):
         self.leaf = leaf
@@ -47,20 +65,100 @@ class BPlusTree:
         Handle root splitting if necessary
         Maintain sorted order and balance properties.
         """
-        pass
+        root = self.root
+        # If root is full, split it and make a new root
+        if len(root.keys) == self.order:
+            new_root = Node(leaf=False)
+            new_root.children.append(root)
+            # split child 0 of new_root (which is old root)
+            self._split_child(new_root, 0)
+            self.root = new_root
+
+        # Insert into a non-full node (root is guaranteed non-full now)
+        self._insert_non_full(self.root, key, value)
+
 
     def _insert_non_full ( self , node , key , value ) :
-        # Recursive helper to insert into a non-full node.
-        # Split child nodes if they become full during insertion.
-        pass
+        # Insert key,value into node which is guaranteed to be non-full.
+        if node.leaf:
+            # find position to insert to keep keys sorted
+            pos = 0
+            while pos < len(node.keys) and node.keys[pos] < key:
+                pos += 1
+            # if key already exists, update the value
+            if pos < len(node.keys) and node.keys[pos] == key:
+                node.values[pos] = value
+            else:
+                node.keys.insert(pos, key)
+                node.values.insert(pos, value)
+            return
+
+        # node is internal: find child to descend into
+        # choose child index
+        if len(node.keys) == 0:
+            idx = 0
+        elif key >= node.keys[-1]:
+            idx = len(node.keys)
+        else:
+            idx = 0
+            for i in range(len(node.keys)):
+                if key < node.keys[i]:
+                    idx = i
+                    break
+
+        child = node.children[idx]
+        # if child is full, split it first
+        if len(child.keys) == self.order:
+            self._split_child(node, idx)
+            # After split, decide which of the two children to descend into
+            if idx < len(node.keys) and key >= node.keys[idx]:
+                idx += 1
+        # recurse into the appropriate child (now non-full)
+        self._insert_non_full(node.children[idx], key, value)
+
 
     def _split_child ( self , parent , index ) :
         """
-        Split the arentchild at the given index
-        For leaves:preserve the linked list structure and copy the middle key to the parent.
-        For internal nodes: promote the middle key and split the children
+        Split the parent.children[index] node into two nodes.
+        For leaves: preserve linked list and copy smallest key of right node up to parent.
+        For internal nodes: promote middle key to parent and split children accordingly.
         """
-        pass
+        child = parent.children[index]
+        new_child = Node(leaf=child.leaf)
+
+        # choose split point
+        # For order = max keys, put floor(order/2) keys in left, rest in right
+        mid = self.order // 2
+
+        if child.leaf:
+            # split keys and values
+            new_child.keys = child.keys[mid:]
+            new_child.values = child.values[mid:]
+            child.keys = child.keys[:mid]
+            child.values = child.values[:mid]
+
+            # link list maintenance
+            new_child.next = child.next
+            child.next = new_child
+
+            # insert first key of new_child into parent
+            promote_key = new_child.keys[0]
+            parent.keys.insert(index, promote_key)
+            parent.children.insert(index + 1, new_child)
+        else:
+            # internal node: promote middle key, split children around it
+            promote_key = child.keys[mid]
+            # left keys: up to mid-1 (0..mid-1), right keys: mid+1..
+            new_child.keys = child.keys[mid + 1:]
+            child.keys = child.keys[:mid]
+
+            # split children: left has first mid+1 children, right has remaining
+            new_child.children = child.children[mid + 1:]
+            child.children = child.children[:mid + 1]
+
+            parent.keys.insert(index, promote_key)
+            parent.children.insert(index + 1, new_child)
+
 
     def delete ( self, key ) :
         """
