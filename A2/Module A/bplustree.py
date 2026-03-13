@@ -62,32 +62,25 @@ class BPlusTree:
         return None
 
 
-    def insert ( self , key , value ) :
-        """
-        Insert key-value pair into the B+ tree.
-        Handle root splitting if necessary
-        Maintain sorted order and balance properties.
-        """
-        root = self.root
+    def insert(self, key, value):
+       
         max_keys = self.order - 1
 
-        # If root is full, split it and make a new root
-        if len(root.keys) == max_keys:
-            new_root = Node(leaf=False)
-            new_root.children.append(root)
-
-            # split child 0 of new_root (which is old root)
-            self._split_child(new_root, 0)
-
-            self.root = new_root
-
-        # Insert into a non-full node (root is guaranteed non-full now)
+        # Defer the split to after insertion
         self._insert_non_full(self.root, key, value)
 
+        # If the root overflowed during the insertion, split it now
+        if len(self.root.keys) > max_keys:
+            new_root = Node(leaf=False)
+            new_root.children.append(self.root)
+            
+            # Use your template's split function
+            self._split_child(new_root, 0)
+            self.root = new_root
 
-    def _insert_non_full ( self , node , key , value ) :
-        # Recursive helper to insert into a non-full node.
-        # Split child nodes if they become full during insertion.
+    def _insert_non_full(self, node, key, value):
+
+        max_keys = self.order - 1
 
         if node.leaf:
             pos = 0
@@ -101,45 +94,30 @@ class BPlusTree:
                 node.values.insert(pos, value)
             return
 
-        # find child index to descend to
-
+        # Internal node: find child index to descend to
         idx = 0
         while idx < len(node.keys) and key >= node.keys[idx]:
             idx += 1
 
-        child = node.children[idx]
-        max_keys = self.order - 1
-
-        if len(child.keys) == max_keys:
-            self._split_child(node, idx)
-
-            # after split, decide which child to descend to
-            if idx < len(node.keys) and key >= node.keys[idx]:
-                idx += 1
-
+        # Recurse FIRST
         self._insert_non_full(node.children[idx], key, value)
 
+        # React AFTER: Check if the child we just inserted into overflowed
+        if len(node.children[idx].keys) > max_keys:
+            self._split_child(node, idx)
 
-    def _split_child ( self , parent , index ) :
-        """
-        Split the arentchild at the given index
-        For leaves:preserve the linked list structure and copy the middle key to the parent.
-        For internal nodes: promote the middle key and split the children
-        """
+    def _split_child(self, parent, index):
 
         child = parent.children[index]
         new_child = Node(leaf=child.leaf)
 
-        # choose split point based on actual number of keys in the child
-        k = len(child.keys)
+        k = len(child.keys) # This is currently max_keys + 1
 
         if child.leaf:
-            # for leaves, give left ceil(k/2) keys, right the rest
-            mid = (k + 1) // 2
+            mid = k // 2
 
             new_child.keys = child.keys[mid:]
             new_child.values = child.values[mid:]
-
             child.keys = child.keys[:mid]
             child.values = child.values[:mid]
 
@@ -150,9 +128,7 @@ class BPlusTree:
 
             parent.keys.insert(index, promote_key)
             parent.children.insert(index + 1, new_child)
-
         else:
-            # for internal nodes promote the middle key
             mid = k // 2
             promote_key = child.keys[mid]
 
@@ -183,13 +159,8 @@ class BPlusTree:
 # provide left siblign for merging
 # merge left and right update the next pointers and delete the right child value that is present in the parnet
 
-    def delete ( self, key ) :
-        """
-        Delete key from the B+ tree.
-        Handle underflow by borrowing from siblings or merging nodes.
-        Update the root if it becomes empty.
-        Return True if deletion succeeded, False otherwise.
-        """
+    def delete(self, key):
+
         if self.root is None:
             return False
 
@@ -197,32 +168,25 @@ class BPlusTree:
 
         # After deletion, if root is internal and has no keys, replace with its single child
         if self.root is not None and not self.root.leaf and len(self.root.keys) == 0:
-            # promote the single child to be the new root
             self.root = self.root.children[0]
 
-        # If root is a leaf and becomes empty, represent tree as an empty leaf (keep root as a node)
+        # If root is an empty leaf, keep it as a valid node
         if self.root is not None and self.root.leaf and len(self.root.keys) == 0:
-            # keep a valid Node object as root (avoid None to keep insert/search safe)
             self.root = Node(leaf=True)
 
         return deleted
 
-    def _delete ( self , node , key ) :
-        # Recursive helper for deletion. Handle leaf and internal nodes .
-        # Ensure all nodes maintain minimum keys after deletion.
+    def _delete(self, node, key):
 
-        max_keys = self.order - 1
+        import math
         min_keys = math.ceil(self.order / 2) - 1
 
-        # If node is a leaf, remove the key if present
         if node.leaf:
-            # find key linearly (avoid bisect as requested)
             pos = 0
             while pos < len(node.keys) and node.keys[pos] < key:
                 pos += 1
 
             if pos < len(node.keys) and node.keys[pos] == key:
-                # delete key and corresponding value
                 node.keys.pop(pos)
                 node.values.pop(pos)
                 return True
@@ -234,33 +198,21 @@ class BPlusTree:
         while idx < len(node.keys) and key >= node.keys[idx]:
             idx += 1
 
-        # Ensure the child we will descend into has at least min_keys+1 before descending
-        child = node.children[idx]
-        if len(child.keys) == min_keys:
-            self._fill_child(node, idx)
-            # fill may have changed structure (merge), recompute idx
-            idx = 0
-            while idx < len(node.keys) and key >= node.keys[idx]:
-                idx += 1
-            # guard if children changed
-            if idx >= len(node.children):
-                idx = len(node.children) - 1
-
-        # Recurse into the (now safe) child
+        # Recurse FIRST
         deleted = self._delete(node.children[idx], key)
         if not deleted:
             return False
 
+        # React AFTER: Fix the child if it underflowed during the recursive call
+        if len(node.children[idx].keys) < min_keys:
+            self._fill_child(node, idx)
 
         return True
 
-    def _fill_child ( self , node , index ) :
-        # Ensure child at given index has enough keys by borrowing from siblings or merging.
+    def _fill_child(self, node, index):
 
-        max_keys = self.order - 1
+        import math
         min_keys = math.ceil(self.order / 2) - 1
-
-        child = node.children[index]
 
         # Try borrow from previous sibling
         if index - 1 >= 0 and len(node.children[index - 1].keys) > min_keys:
@@ -274,10 +226,8 @@ class BPlusTree:
 
         # Otherwise merge with a sibling
         if index + 1 < len(node.children):
-            # merge child with next sibling
             self._merge(node, index)
         else:
-            # merge with previous sibling (index-1)
             self._merge(node, index - 1)
 
     def _borrow_from_prev ( self , node , index ) :
