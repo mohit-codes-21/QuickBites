@@ -212,7 +212,7 @@ class BPlusTree:
         # Ensure all nodes maintain minimum keys after deletion.
 
         max_keys = self.order - 1
-        min_keys = (max_keys + 1) // 2
+        min_keys = math.ceil(self.order / 2) - 1
 
         # If node is a leaf, remove the key if present
         if node.leaf:
@@ -258,7 +258,7 @@ class BPlusTree:
         # Ensure child at given index has enough keys by borrowing from siblings or merging.
 
         max_keys = self.order - 1
-        min_keys = (max_keys + 1) // 2
+        min_keys = math.ceil(self.order / 2) - 1
 
         child = node.children[index]
 
