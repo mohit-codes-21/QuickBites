@@ -689,6 +689,412 @@ def customer_orders():
         return json_response(status=500, message=f"Database error: {exc}")
 
 
+@app.put("/api/customer/profile")
+@require_roles("Customer")
+def update_customer_profile():
+    connection = request.db_connection
+    member_id = request.current_user["memberID"]
+    payload = request.get_json(silent=True) or {}
+
+    name = str(payload.get("name", "")).strip()
+    email = str(payload.get("email", "")).strip()
+    phone_number = str(payload.get("phoneNumber", "")).strip()
+    password = str(payload.get("password", ""))
+
+    updates = []
+    values = []
+
+    try:
+        cursor = connection.cursor(dictionary=True)
+
+        if name:
+            updates.append("name = %s")
+            values.append(name)
+
+        if email:
+            cursor.execute(
+                "SELECT COUNT(*) AS countVal FROM Member WHERE email = %s AND memberID <> %s",
+                (email, member_id),
+            )
+            if cursor.fetchone()["countVal"] > 0:
+                close_request_connection()
+                return json_response(status=409, message="Email already in use")
+            updates.append("email = %s")
+            values.append(email)
+
+        if phone_number:
+            updates.append("phoneNumber = %s")
+            values.append(phone_number)
+
+        if password:
+            updates.append("password = %s")
+            values.append(hash_password(password))
+
+        if not updates:
+            close_request_connection()
+            return json_response(status=400, message="No profile fields provided for update")
+
+        values.append(member_id)
+        cursor.execute(f"UPDATE Member SET {', '.join(updates)} WHERE memberID = %s", tuple(values))
+
+        write_audit_log(
+            connection,
+            member_id,
+            "UPDATE",
+            "Member",
+            member_id,
+            {"name": bool(name), "email": bool(email), "phoneNumber": bool(phone_number), "password": bool(password)},
+        )
+        connection.commit()
+        return json_response(message="Profile updated successfully")
+    except Error as exc:
+        connection.rollback()
+        return json_response(status=500, message=f"Database error: {exc}")
+    finally:
+        close_request_connection()
+
+
+@app.delete("/api/customer/profile")
+@require_roles("Customer")
+def delete_customer_profile():
+    connection = request.db_connection
+    member_id = request.current_user["memberID"]
+
+    try:
+        cursor = connection.cursor()
+        cursor.execute("DELETE FROM Sessions WHERE memberID = %s", (member_id,))
+        cursor.execute("DELETE FROM MemberRoleMapping WHERE memberID = %s", (member_id,))
+        cursor.execute("DELETE FROM Customer WHERE customerID = %s", (member_id,))
+        cursor.execute("DELETE FROM DeliveryPartner WHERE partnerID = %s", (member_id,))
+        cursor.execute("DELETE FROM Member WHERE memberID = %s", (member_id,))
+
+        if cursor.rowcount == 0:
+            connection.rollback()
+            close_request_connection()
+            return json_response(status=404, message="Profile not found")
+
+        write_audit_log(
+            connection,
+            member_id,
+            "DELETE",
+            "Member",
+            member_id,
+            {"selfDelete": True},
+        )
+        connection.commit()
+        close_request_connection()
+        return json_response(message="Profile successfully deleted")
+    except Error as exc:
+        connection.rollback()
+        if getattr(exc, "errno", None) == 1451:
+            close_request_connection()
+            return json_response(
+                status=409,
+                message="Profile cannot be deleted because related records exist (orders/payments/addresses).",
+            )
+        close_request_connection()
+        return json_response(status=500, message=f"Database error: {exc}")
+
+
+@app.get("/api/customer/profile/orders")
+@require_roles("Customer")
+def customer_profile_orders():
+    connection = request.db_connection
+    member_id = request.current_user["memberID"]
+
+    try:
+        cursor = connection.cursor(dictionary=True)
+        cursor.execute(
+            """
+            SELECT o.orderID, o.orderTime, o.orderStatus, o.totalAmount,
+                   r.name AS restaurantName, p.status AS paymentStatus,
+                   orr.restaurantRating, orr.deliveryRating, orr.comment AS orderComment
+            FROM Orders o
+            JOIN Restaurant r ON r.restaurantID = o.restaurantID
+            LEFT JOIN Payment p ON p.paymentID = o.paymentID
+            LEFT JOIN OrderRating orr ON orr.orderID = o.orderID
+            WHERE o.customerID = %s
+            ORDER BY o.orderTime DESC
+            LIMIT 100
+            """,
+            (member_id,),
+        )
+        orders = cursor.fetchall()
+
+        order_map = {}
+        order_ids = []
+        for row in orders:
+            order_ids.append(row["orderID"])
+            row["items"] = []
+            order_map[row["orderID"]] = row
+
+        if order_ids:
+            placeholders = ",".join(["%s"] * len(order_ids))
+            cursor.execute(
+                f"""
+                SELECT oi.orderID, oi.restaurantID, oi.itemID, oi.quantity, oi.priceAtPurchase,
+                       mi.name AS itemName, mir.rating AS itemRating, mir.comment AS itemComment
+                FROM OrderItem oi
+                JOIN MenuItem mi ON mi.restaurantID = oi.restaurantID AND mi.itemID = oi.itemID
+                LEFT JOIN MenuItemRating mir
+                    ON mir.orderID = oi.orderID AND mir.restaurantID = oi.restaurantID AND mir.itemID = oi.itemID
+                WHERE oi.orderID IN ({placeholders})
+                ORDER BY oi.orderID DESC, oi.itemID
+                """,
+                tuple(order_ids),
+            )
+            for item in cursor.fetchall():
+                order_map[item["orderID"]]["items"].append(item)
+
+        close_request_connection()
+        return json_response(orders)
+    except Error as exc:
+        close_request_connection()
+        return json_response(status=500, message=f"Database error: {exc}")
+
+
+@app.get("/api/customer/profile/reviews")
+@require_roles("Customer")
+def customer_profile_reviews():
+    connection = request.db_connection
+    member_id = request.current_user["memberID"]
+
+    try:
+        cursor = connection.cursor(dictionary=True)
+        cursor.execute(
+            """
+            SELECT orr.orderID, o.orderTime, r.name AS restaurantName,
+                   orr.restaurantRating, orr.deliveryRating, orr.comment
+            FROM OrderRating orr
+            JOIN Orders o ON o.orderID = orr.orderID
+            JOIN Restaurant r ON r.restaurantID = o.restaurantID
+            WHERE o.customerID = %s
+            ORDER BY o.orderTime DESC
+            """,
+            (member_id,),
+        )
+        order_reviews = cursor.fetchall()
+
+        cursor.execute(
+            """
+            SELECT mir.orderID, mir.restaurantID, mir.itemID, mir.rating, mir.comment,
+                   o.orderTime, r.name AS restaurantName, mi.name AS itemName
+            FROM MenuItemRating mir
+            JOIN Orders o ON o.orderID = mir.orderID
+            JOIN Restaurant r ON r.restaurantID = mir.restaurantID
+            JOIN MenuItem mi ON mi.restaurantID = mir.restaurantID AND mi.itemID = mir.itemID
+            WHERE o.customerID = %s
+            ORDER BY o.orderTime DESC, mir.orderID DESC, mir.itemID
+            """,
+            (member_id,),
+        )
+        item_reviews = cursor.fetchall()
+
+        close_request_connection()
+        return json_response({"orderReviews": order_reviews, "itemReviews": item_reviews})
+    except Error as exc:
+        close_request_connection()
+        return json_response(status=500, message=f"Database error: {exc}")
+
+
+@app.post("/api/customer/reviews/order/<int:order_id>")
+@app.put("/api/customer/reviews/order/<int:order_id>")
+@require_roles("Customer")
+def upsert_order_review(order_id):
+    connection = request.db_connection
+    member_id = request.current_user["memberID"]
+    payload = request.get_json(silent=True) or {}
+
+    restaurant_rating = payload.get("restaurantRating")
+    delivery_rating = payload.get("deliveryRating")
+    comment = str(payload.get("comment", "")).strip() or None
+
+    if restaurant_rating is None and delivery_rating is None and comment is None:
+        close_request_connection()
+        return json_response(status=400, message="Provide at least one review field")
+
+    try:
+        cursor = connection.cursor(dictionary=True)
+        cursor.execute("SELECT 1 FROM Orders WHERE orderID = %s AND customerID = %s", (order_id, member_id))
+        if not cursor.fetchone():
+            close_request_connection()
+            return json_response(status=404, message="Order not found for this customer")
+
+        cursor.execute(
+            """
+            INSERT INTO OrderRating(orderID, restaurantRating, deliveryRating, comment)
+            VALUES (%s, %s, %s, %s)
+            ON DUPLICATE KEY UPDATE
+                restaurantRating = VALUES(restaurantRating),
+                deliveryRating = VALUES(deliveryRating),
+                comment = VALUES(comment)
+            """,
+            (order_id, restaurant_rating, delivery_rating, comment),
+        )
+
+        write_audit_log(
+            connection,
+            member_id,
+            "UPDATE",
+            "OrderRating",
+            order_id,
+            {"restaurantRating": restaurant_rating, "deliveryRating": delivery_rating, "comment": comment},
+        )
+        connection.commit()
+        close_request_connection()
+        return json_response(message="Order review saved")
+    except Error as exc:
+        connection.rollback()
+        close_request_connection()
+        return json_response(status=500, message=f"Database error: {exc}")
+
+
+@app.delete("/api/customer/reviews/order/<int:order_id>")
+@require_roles("Customer")
+def delete_order_review(order_id):
+    connection = request.db_connection
+    member_id = request.current_user["memberID"]
+
+    try:
+        cursor = connection.cursor(dictionary=True)
+        cursor.execute("SELECT 1 FROM Orders WHERE orderID = %s AND customerID = %s", (order_id, member_id))
+        if not cursor.fetchone():
+            close_request_connection()
+            return json_response(status=404, message="Order not found for this customer")
+
+        cursor.execute("DELETE FROM OrderRating WHERE orderID = %s", (order_id,))
+        if cursor.rowcount == 0:
+            connection.rollback()
+            close_request_connection()
+            return json_response(status=404, message="Order review not found")
+
+        write_audit_log(connection, member_id, "DELETE", "OrderRating", order_id, {"deleted": True})
+        connection.commit()
+        close_request_connection()
+        return json_response(message="Order review deleted")
+    except Error as exc:
+        connection.rollback()
+        close_request_connection()
+        return json_response(status=500, message=f"Database error: {exc}")
+
+
+@app.post("/api/customer/reviews/item")
+@app.put("/api/customer/reviews/item")
+@require_roles("Customer")
+def upsert_item_review():
+    connection = request.db_connection
+    member_id = request.current_user["memberID"]
+    payload = request.get_json(silent=True) or {}
+
+    order_id = payload.get("orderID")
+    restaurant_id = payload.get("restaurantID")
+    item_id = payload.get("itemID")
+    rating = payload.get("rating")
+    comment = str(payload.get("comment", "")).strip() or None
+
+    if order_id is None or restaurant_id is None or item_id is None or rating is None:
+        close_request_connection()
+        return json_response(status=400, message="orderID, restaurantID, itemID, rating are required")
+
+    try:
+        cursor = connection.cursor(dictionary=True)
+        cursor.execute(
+            """
+            SELECT 1
+            FROM Orders o
+            JOIN OrderItem oi ON oi.orderID = o.orderID
+            WHERE o.orderID = %s AND o.customerID = %s AND oi.restaurantID = %s AND oi.itemID = %s
+            """,
+            (order_id, member_id, restaurant_id, item_id),
+        )
+        if not cursor.fetchone():
+            close_request_connection()
+            return json_response(status=404, message="Order item not found for this customer")
+
+        cursor.execute(
+            """
+            INSERT INTO MenuItemRating(restaurantID, itemID, orderID, rating, comment)
+            VALUES (%s, %s, %s, %s, %s)
+            ON DUPLICATE KEY UPDATE
+                rating = VALUES(rating),
+                comment = VALUES(comment)
+            """,
+            (restaurant_id, item_id, order_id, rating, comment),
+        )
+
+        write_audit_log(
+            connection,
+            member_id,
+            "UPDATE",
+            "MenuItemRating",
+            f"{order_id}:{restaurant_id}:{item_id}",
+            {"rating": rating, "comment": comment},
+        )
+        connection.commit()
+        close_request_connection()
+        return json_response(message="Item review saved")
+    except Error as exc:
+        connection.rollback()
+        close_request_connection()
+        return json_response(status=500, message=f"Database error: {exc}")
+
+
+@app.delete("/api/customer/reviews/item")
+@require_roles("Customer")
+def delete_item_review():
+    connection = request.db_connection
+    member_id = request.current_user["memberID"]
+    payload = request.get_json(silent=True) or {}
+
+    order_id = payload.get("orderID")
+    restaurant_id = payload.get("restaurantID")
+    item_id = payload.get("itemID")
+
+    if order_id is None or restaurant_id is None or item_id is None:
+        close_request_connection()
+        return json_response(status=400, message="orderID, restaurantID, itemID are required")
+
+    try:
+        cursor = connection.cursor(dictionary=True)
+        cursor.execute(
+            """
+            SELECT 1
+            FROM Orders o
+            JOIN OrderItem oi ON oi.orderID = o.orderID
+            WHERE o.orderID = %s AND o.customerID = %s AND oi.restaurantID = %s AND oi.itemID = %s
+            """,
+            (order_id, member_id, restaurant_id, item_id),
+        )
+        if not cursor.fetchone():
+            close_request_connection()
+            return json_response(status=404, message="Order item not found for this customer")
+
+        cursor.execute(
+            "DELETE FROM MenuItemRating WHERE orderID = %s AND restaurantID = %s AND itemID = %s",
+            (order_id, restaurant_id, item_id),
+        )
+        if cursor.rowcount == 0:
+            connection.rollback()
+            close_request_connection()
+            return json_response(status=404, message="Item review not found")
+
+        write_audit_log(
+            connection,
+            member_id,
+            "DELETE",
+            "MenuItemRating",
+            f"{order_id}:{restaurant_id}:{item_id}",
+            {"deleted": True},
+        )
+        connection.commit()
+        close_request_connection()
+        return json_response(message="Item review deleted")
+    except Error as exc:
+        connection.rollback()
+        close_request_connection()
+        return json_response(status=500, message=f"Database error: {exc}")
+
+
 @app.get("/api/delivery/assignments")
 @require_roles("DeliveryPartner", "Admin")
 def delivery_assignments():

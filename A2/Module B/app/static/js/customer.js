@@ -4,6 +4,8 @@ const state = {
     user: null,
     restaurants: [],
     menuItems: [],
+    profileOrders: [],
+    profileReviews: { orderReviews: [], itemReviews: [] },
     cart: JSON.parse(localStorage.getItem("qb_cart") || "[]"),
 };
 
@@ -28,6 +30,16 @@ const selectors = {
     browseResults: document.getElementById("browse-results"),
     profileMemberDetails: document.getElementById("profile-member-details"),
     profileCustomerDetails: document.getElementById("profile-customer-details"),
+    profileOrdersList: document.getElementById("profile-orders-list"),
+    profileReviewsList: document.getElementById("profile-reviews-list"),
+    profileEditToggleBtn: document.getElementById("profile-edit-toggle-btn"),
+    profileEditCancelBtn: document.getElementById("profile-edit-cancel-btn"),
+    profileUpdateForm: document.getElementById("profile-update-form"),
+    profileUpdateName: document.getElementById("profile-update-name"),
+    profileUpdateEmail: document.getElementById("profile-update-email"),
+    profileUpdatePhone: document.getElementById("profile-update-phone"),
+    profileUpdatePassword: document.getElementById("profile-update-password"),
+    profileDeleteBtn: document.getElementById("profile-delete-btn"),
     cartItems: document.getElementById("cart-items"),
     cartItemCount: document.getElementById("cart-item-count"),
     cartTotal: document.getElementById("cart-total"),
@@ -174,6 +186,134 @@ function renderDefinitionList(target, dataMap) {
     `).join("");
 }
 
+function renderProfileOrders() {
+    const target = selectors.profileOrdersList;
+    if (!target) {
+        return;
+    }
+    if (!state.profileOrders.length) {
+        renderEmptyState(target, "No previous orders yet.");
+        return;
+    }
+
+    target.innerHTML = state.profileOrders.map((order) => {
+        const orderReviewExists = order.restaurantRating !== null || order.deliveryRating !== null || !!order.orderComment;
+        const itemRows = (order.items || []).map((item) => {
+            const hasItemReview = item.itemRating !== null || !!item.itemComment;
+            return `
+                <tr>
+                    <td>${item.itemName}</td>
+                    <td>${item.quantity}</td>
+                    <td>Rs ${Number(item.priceAtPurchase).toFixed(2)}</td>
+                    <td>${item.itemRating ?? "-"}</td>
+                    <td>${item.itemComment || "-"}</td>
+                    <td>
+                        <button type="button" data-item-review-action="edit" data-order-id="${order.orderID}" data-restaurant-id="${item.restaurantID}" data-item-id="${item.itemID}" data-item-rating="${item.itemRating ?? ""}" data-item-comment="${item.itemComment || ""}">${hasItemReview ? "Edit" : "Review"}</button>
+                        ${hasItemReview ? `<button type="button" class="btn-danger" data-item-review-action="delete" data-order-id="${order.orderID}" data-restaurant-id="${item.restaurantID}" data-item-id="${item.itemID}">Delete</button>` : ""}
+                    </td>
+                </tr>
+            `;
+        }).join("");
+
+        return `
+            <details class="expand-card">
+                <summary>
+                    <span>Order #${order.orderID} · ${order.restaurantName}</span>
+                    <span>${new Date(order.orderTime).toLocaleString()} · ${order.orderStatus}</span>
+                </summary>
+                <div class="expand-body">
+                    <p><strong>Total:</strong> Rs ${Number(order.totalAmount).toFixed(2)} · <strong>Payment:</strong> ${order.paymentStatus || "-"}</p>
+                    <div class="review-row">
+                        <span><strong>Restaurant Rating:</strong> ${order.restaurantRating ?? "-"}</span>
+                        <span><strong>Delivery Rating:</strong> ${order.deliveryRating ?? "-"}</span>
+                        <span><strong>Comment:</strong> ${order.orderComment || "-"}</span>
+                        <span>
+                            <button type="button" data-order-review-action="edit" data-order-id="${order.orderID}" data-order-restaurant-rating="${order.restaurantRating ?? ""}" data-order-delivery-rating="${order.deliveryRating ?? ""}" data-order-comment="${order.orderComment || ""}">${orderReviewExists ? "Edit Order Review" : "Review Order"}</button>
+                            ${orderReviewExists ? `<button type="button" class="btn-danger" data-order-review-action="delete" data-order-id="${order.orderID}">Delete Order Review</button>` : ""}
+                        </span>
+                    </div>
+                    <div class="table-wrap profile-order-table">
+                        <table>
+                            <thead>
+                                <tr><th>Item</th><th>Qty</th><th>Price</th><th>Rating</th><th>Comment</th><th>Actions</th></tr>
+                            </thead>
+                            <tbody>${itemRows}</tbody>
+                        </table>
+                    </div>
+                </div>
+            </details>
+        `;
+    }).join("");
+}
+
+function renderProfileReviews() {
+    const target = selectors.profileReviewsList;
+    if (!target) {
+        return;
+    }
+    const orderReviews = state.profileReviews.orderReviews || [];
+    const itemReviews = state.profileReviews.itemReviews || [];
+    if (!orderReviews.length && !itemReviews.length) {
+        renderEmptyState(target, "You have not added any reviews yet.");
+        return;
+    }
+
+    const orderReviewRows = orderReviews.map((row) => `
+        <details class="expand-card">
+            <summary>
+                <span>Order #${row.orderID} · ${row.restaurantName}</span>
+                <span>${new Date(row.orderTime).toLocaleDateString()}</span>
+            </summary>
+            <div class="expand-body review-row">
+                <span><strong>Restaurant:</strong> ${row.restaurantRating ?? "-"}</span>
+                <span><strong>Delivery:</strong> ${row.deliveryRating ?? "-"}</span>
+                <span><strong>Comment:</strong> ${row.comment || "-"}</span>
+                <span>
+                    <button type="button" data-order-review-action="edit" data-order-id="${row.orderID}" data-order-restaurant-rating="${row.restaurantRating ?? ""}" data-order-delivery-rating="${row.deliveryRating ?? ""}" data-order-comment="${row.comment || ""}">Edit</button>
+                    <button type="button" class="btn-danger" data-order-review-action="delete" data-order-id="${row.orderID}">Delete</button>
+                </span>
+            </div>
+        </details>
+    `).join("");
+
+    const itemReviewRows = itemReviews.map((row) => `
+        <details class="expand-card">
+            <summary>
+                <span>${row.itemName} · ${row.restaurantName}</span>
+                <span>Order #${row.orderID}</span>
+            </summary>
+            <div class="expand-body review-row">
+                <span><strong>Rating:</strong> ${row.rating ?? "-"}</span>
+                <span><strong>Comment:</strong> ${row.comment || "-"}</span>
+                <span>
+                    <button type="button" data-item-review-action="edit" data-order-id="${row.orderID}" data-restaurant-id="${row.restaurantID}" data-item-id="${row.itemID}" data-item-rating="${row.rating ?? ""}" data-item-comment="${row.comment || ""}">Edit</button>
+                    <button type="button" class="btn-danger" data-item-review-action="delete" data-order-id="${row.orderID}" data-restaurant-id="${row.restaurantID}" data-item-id="${row.itemID}">Delete</button>
+                </span>
+            </div>
+        </details>
+    `).join("");
+
+    target.innerHTML = `
+        <div class="review-groups">
+            <h4>Restaurant / Order Reviews</h4>
+            ${orderReviewRows || '<div class="empty-state">No order reviews yet.</div>'}
+            <h4>Order Item Reviews</h4>
+            ${itemReviewRows || '<div class="empty-state">No item reviews yet.</div>'}
+        </div>
+    `;
+}
+
+async function loadProfileOrdersAndReviews() {
+    const [ordersPayload, reviewsPayload] = await Promise.all([
+        api("/api/customer/profile/orders"),
+        api("/api/customer/profile/reviews"),
+    ]);
+    state.profileOrders = ordersPayload.data || [];
+    state.profileReviews = reviewsPayload.data || { orderReviews: [], itemReviews: [] };
+    renderProfileOrders();
+    renderProfileReviews();
+}
+
 function renderCart() {
     if (!selectors.cartItems) {
         updateCartBadge();
@@ -201,6 +341,16 @@ function renderCart() {
         </article>
     `).join("");
     updateCartBadge();
+}
+
+function toggleProfileEditMode(showForm) {
+    if (!selectors.profileUpdateForm) {
+        return;
+    }
+    selectors.profileUpdateForm.classList.toggle("hidden", !showForm);
+    if (selectors.profileEditToggleBtn) {
+        selectors.profileEditToggleBtn.classList.toggle("hidden", showForm);
+    }
 }
 
 async function ensureCustomerSession() {
@@ -267,6 +417,183 @@ async function loadProfile() {
         "Cart Total": customerProfile.cartTotalAmount,
         "Membership Due": customerProfile.membershipDueDate,
     });
+
+    if (selectors.profileUpdateName) {
+        selectors.profileUpdateName.value = member.name || "";
+    }
+    if (selectors.profileUpdateEmail) {
+        selectors.profileUpdateEmail.value = member.email || "";
+    }
+    if (selectors.profileUpdatePhone) {
+        selectors.profileUpdatePhone.value = member.phoneNumber || "";
+    }
+    if (selectors.profileUpdatePassword) {
+        selectors.profileUpdatePassword.value = "";
+    }
+
+    await loadProfileOrdersAndReviews();
+}
+
+async function handleOrderReviewAction(event) {
+    const actionButton = event.target.closest("[data-order-review-action]");
+    if (!actionButton) {
+        return;
+    }
+    const orderID = Number(actionButton.dataset.orderId);
+    const action = actionButton.dataset.orderReviewAction;
+
+    if (action === "delete") {
+        if (!window.confirm(`Delete review for order ${orderID}?`)) {
+            return;
+        }
+        try {
+            const response = await api(`/api/customer/reviews/order/${orderID}`, { method: "DELETE" });
+            showToast(response.message || "Order review deleted");
+            await loadProfileOrdersAndReviews();
+        } catch (error) {
+            showToast(error.message, true);
+        }
+        return;
+    }
+
+    const oldRestaurantRating = actionButton.dataset.orderRestaurantRating || "";
+    const oldDeliveryRating = actionButton.dataset.orderDeliveryRating || "";
+    const oldComment = actionButton.dataset.orderComment || "";
+
+    const restaurantRatingRaw = window.prompt("Restaurant rating (1-5, optional)", oldRestaurantRating);
+    if (restaurantRatingRaw === null) {
+        return;
+    }
+    const deliveryRatingRaw = window.prompt("Delivery rating (1-5, optional)", oldDeliveryRating);
+    if (deliveryRatingRaw === null) {
+        return;
+    }
+    const commentRaw = window.prompt("Comment (optional)", oldComment);
+    if (commentRaw === null) {
+        return;
+    }
+
+    const restaurantRating = restaurantRatingRaw.trim() ? Number(restaurantRatingRaw) : null;
+    const deliveryRating = deliveryRatingRaw.trim() ? Number(deliveryRatingRaw) : null;
+
+    try {
+        const response = await api(`/api/customer/reviews/order/${orderID}`, {
+            method: "PUT",
+            body: JSON.stringify({
+                restaurantRating,
+                deliveryRating,
+                comment: commentRaw.trim(),
+            }),
+        });
+        showToast(response.message || "Order review saved");
+        await loadProfileOrdersAndReviews();
+    } catch (error) {
+        showToast(error.message, true);
+    }
+}
+
+async function handleItemReviewAction(event) {
+    const actionButton = event.target.closest("[data-item-review-action]");
+    if (!actionButton) {
+        return;
+    }
+    const orderID = Number(actionButton.dataset.orderId);
+    const restaurantID = Number(actionButton.dataset.restaurantId);
+    const itemID = Number(actionButton.dataset.itemId);
+    const action = actionButton.dataset.itemReviewAction;
+
+    if (action === "delete") {
+        if (!window.confirm(`Delete review for item ${restaurantID}:${itemID} in order ${orderID}?`)) {
+            return;
+        }
+        try {
+            const response = await api("/api/customer/reviews/item", {
+                method: "DELETE",
+                body: JSON.stringify({ orderID, restaurantID, itemID }),
+            });
+            showToast(response.message || "Item review deleted");
+            await loadProfileOrdersAndReviews();
+        } catch (error) {
+            showToast(error.message, true);
+        }
+        return;
+    }
+
+    const oldRating = actionButton.dataset.itemRating || "";
+    const oldComment = actionButton.dataset.itemComment || "";
+
+    const ratingRaw = window.prompt("Item rating (1-5)", oldRating || "5");
+    if (ratingRaw === null) {
+        return;
+    }
+    const commentRaw = window.prompt("Comment (optional)", oldComment);
+    if (commentRaw === null) {
+        return;
+    }
+
+    try {
+        const response = await api("/api/customer/reviews/item", {
+            method: "PUT",
+            body: JSON.stringify({
+                orderID,
+                restaurantID,
+                itemID,
+                rating: Number(ratingRaw),
+                comment: commentRaw.trim(),
+            }),
+        });
+        showToast(response.message || "Item review saved");
+        await loadProfileOrdersAndReviews();
+    } catch (error) {
+        showToast(error.message, true);
+    }
+}
+
+async function handleProfileUpdate(event) {
+    event.preventDefault();
+    const payload = {
+        name: selectors.profileUpdateName?.value.trim() || "",
+        email: selectors.profileUpdateEmail?.value.trim() || "",
+        phoneNumber: selectors.profileUpdatePhone?.value.trim() || "",
+        password: selectors.profileUpdatePassword?.value || "",
+    };
+
+    try {
+        const response = await api("/api/customer/profile", {
+            method: "PUT",
+            body: JSON.stringify(payload),
+        });
+        showToast(response.message || "Profile updated successfully");
+        await loadProfile();
+        toggleProfileEditMode(false);
+        const mePayload = await api("/api/auth/me");
+        state.user = mePayload.data;
+        if (selectors.customerUserChip) {
+            selectors.customerUserChip.textContent = state.user.name;
+        }
+    } catch (error) {
+        showToast(error.message, true);
+    }
+}
+
+async function handleProfileDelete() {
+    const confirmed = window.confirm("Are you sure you want to delete your profile?");
+    if (!confirmed) {
+        return;
+    }
+
+    try {
+        const response = await api("/api/customer/profile", { method: "DELETE" });
+        showToast(response.message || "Profile successfully deleted");
+        localStorage.removeItem("qb_token");
+        localStorage.removeItem("qb_portal");
+        localStorage.removeItem("qb_cart");
+        setTimeout(() => {
+            window.location.href = "/";
+        }, 800);
+    } catch (error) {
+        showToast(error.message, true);
+    }
 }
 
 async function populateHome() {
@@ -396,8 +723,21 @@ function bindEvents() {
         event.preventDefault();
         await populateBrowsePage();
     });
+    selectors.profileEditToggleBtn?.addEventListener("click", () => {
+        toggleProfileEditMode(true);
+    });
+    selectors.profileEditCancelBtn?.addEventListener("click", async () => {
+        await loadProfile();
+        toggleProfileEditMode(false);
+    });
+    selectors.profileOrdersList?.addEventListener("click", handleOrderReviewAction);
+    selectors.profileOrdersList?.addEventListener("click", handleItemReviewAction);
+    selectors.profileReviewsList?.addEventListener("click", handleOrderReviewAction);
+    selectors.profileReviewsList?.addEventListener("click", handleItemReviewAction);
     selectors.featuredMenuItems?.addEventListener("click", handleMenuGridClick);
     selectors.browseResults?.addEventListener("click", handleMenuGridClick);
+    selectors.profileUpdateForm?.addEventListener("submit", handleProfileUpdate);
+    selectors.profileDeleteBtn?.addEventListener("click", handleProfileDelete);
     selectors.clearCartBtn?.addEventListener("click", () => {
         state.cart = [];
         persistCart();

@@ -159,6 +159,40 @@
                     <dl id="profile-customer-details" class="profile-list"></dl>
                 </article>
             </div>
+
+            <div class="profile-history-grid">
+                <article class="profile-card">
+                    <h3>Previous Orders</h3>
+                    <div id="profile-orders-list"></div>
+                </article>
+                <article class="profile-card">
+                    <h3>Your Reviews</h3>
+                    <div id="profile-reviews-list"></div>
+                </article>
+            </div>
+
+            <div class="profile-actions">
+                <article class="profile-card">
+                    <h3>Update Profile</h3>
+                    <button id="profile-edit-toggle-btn" type="button">Update Profile</button>
+                    <form id="profile-update-form" class="grid-form hidden">
+                        <input type="text" id="profile-update-name" placeholder="Name" />
+                        <input type="email" id="profile-update-email" placeholder="Email" />
+                        <input type="text" id="profile-update-phone" placeholder="Phone number" maxlength="10" />
+                        <input type="password" id="profile-update-password" placeholder="New password (optional)" />
+                        <div class="profile-edit-actions">
+                            <button type="submit">Save</button>
+                            <button id="profile-edit-cancel-btn" type="button" class="btn-secondary">Cancel</button>
+                        </div>
+                    </form>
+                </article>
+
+                <article class="profile-card danger-zone">
+                    <h3>Delete Profile</h3>
+                    <p>This action permanently deletes your profile account.</p>
+                    <button id="profile-delete-btn" type="button" class="btn-danger">Delete Profile</button>
+                </article>
+            </div>
         </section>
 
         <section id="customer-cart-section" class="customer-section{% if page_name != 'cart' %} hidden{% endif %}">
