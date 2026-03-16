@@ -1,32 +1,6 @@
-# understand how algorithms are implemented
-# undertand data types
-# start from seaching
-# searching
-# check if root is leaf
-# if lef then just check all the keys
-# else check where it lies w.r.t to keys and go to subsequent child Nodeone
-# call change node to child node and iterate again
-
-# insert
-# understand helper function
-# write helper functons
-# do below steps using helper functions
-
-# use a while true loop
-# go to root  check if root is full
-# if yes split root
-#     then make new root
-# else check root is leaf
-#     if yes then add key, val
-#     else check which child
-#       if child is full
-#         split child taking cases if it is leaf or not
-#       else
-#         add key, value to child only if child is leaf else traverse
-
-# deltion
-
 import math
+import bisect
+import graphviz
 class Node:
     def __init__(self, leaf=False):
         self.leaf = leaf
@@ -36,34 +10,36 @@ class Node:
         self.next = None
 
 class BPlusTree:
+    def _find_leaf(self, key):
+        """Helper method to traverse to the correct leaf node using binary search."""
+        node = self.root
+        while not node.leaf:
+            # bisect_right finds the index where the key should go.
+            # This replaces your linear for-loop and if-statements perfectly.
+            idx = bisect.bisect_right(node.keys, key)
+            node = node.children[idx]
+        return node
+
     def __init__(self, order=4):
         self.order = order
         self.root = Node(leaf=True)
 
-    def search ( self, key ) :
-        # Search for a key in the B+ tree. Return the associated value if found, else None.
-        # Traverse from root to appropriate leaf node.
-        node=self.root
-        while(node.leaf!=True):
-            l=len(node.keys)
-            if(key>= node.keys[l-1]):
-                node=node.children[l]
-                continue
-            for i in range(0,l):
-                if(key< node.keys[i]):
-                    node=node.children[i]
-                    break
+    def search(self, key):
+        # 1. Traverse to the correct leaf
+        leaf = self._find_leaf(key)
 
-        l=len(node.keys)
-        for i in range(0,l):
-            if(node.keys[i]==key):
-                return node.values[i]
+        # 2. Binary search within the leaf to find the key
+        idx = bisect.bisect_left(leaf.keys, key)
+
+        # 3. Check if the key exists at that index
+        if idx < len(leaf.keys) and leaf.keys[idx] == key:
+            return leaf.values[idx]
 
         return None
 
 
     def insert(self, key, value):
-       
+
         max_keys = self.order - 1
 
         # Defer the split to after insertion
@@ -73,7 +49,7 @@ class BPlusTree:
         if len(self.root.keys) > max_keys:
             new_root = Node(leaf=False)
             new_root.children.append(self.root)
-            
+
             # Use your template's split function
             self._split_child(new_root, 0)
             self.root = new_root
@@ -83,9 +59,8 @@ class BPlusTree:
         max_keys = self.order - 1
 
         if node.leaf:
-            pos = 0
-            while pos < len(node.keys) and key > node.keys[pos]:
-                pos += 1
+            # OPTIMIZATION: Use bisect_left to find exact insertion point
+            pos = bisect.bisect_left(node.keys, key)
 
             if pos < len(node.keys) and node.keys[pos] == key:
                 node.values[pos] = value
@@ -95,9 +70,8 @@ class BPlusTree:
             return
 
         # Internal node: find child index to descend to
-        idx = 0
-        while idx < len(node.keys) and key >= node.keys[idx]:
-            idx += 1
+        # OPTIMIZATION: Use bisect_right to find the correct child branch
+        idx = bisect.bisect_right(node.keys, key)
 
         # Recurse FIRST
         self._insert_non_full(node.children[idx], key, value)
@@ -140,24 +114,6 @@ class BPlusTree:
 
             parent.keys.insert(index, promote_key)
             parent.children.insert(index + 1, new_child)
-# check if root is leaf if yes
-#     try to delete return true or False
-# else
-#     call _deleete
-# travers till leaf
-# delele the key,
-# if it is first key
-#     then remove it from parent and replace with new key in parent also and also properly change the next pointer
-# else just delete it
-# check if minimum number of keys in delted node
-# if >min
-#     no probem end function
-# else
-#     try to borrow from left , try to borrow from right
-#     try to merge with left or try to merge with right
-# (Merging)
-# provide left siblign for merging
-# merge left and right update the next pointers and delete the right child value that is present in the parnet
 
     def delete(self, key):
 
@@ -177,14 +133,12 @@ class BPlusTree:
         return deleted
 
     def _delete(self, node, key):
-
-        import math
-        min_keys = math.ceil(self.order / 2) - 1
+        # Recursive helper for deletion. Handle leaf and internal nodes .
+        # Ensure all nodes maintain minimum keys after deletion.
 
         if node.leaf:
-            pos = 0
-            while pos < len(node.keys) and node.keys[pos] < key:
-                pos += 1
+            # OPTIMIZATION: Use bisect_left to instantly find the key
+            pos = bisect.bisect_left(node.keys, key)
 
             if pos < len(node.keys) and node.keys[pos] == key:
                 node.keys.pop(pos)
@@ -194,12 +148,18 @@ class BPlusTree:
                 return False
 
         # Internal node: decide which child to descend into
-        idx = 0
-        while idx < len(node.keys) and key >= node.keys[idx]:
-            idx += 1
+        # OPTIMIZATION: Use bisect_right to find the correct child branch
+        idx = bisect.bisect_right(node.keys, key)
 
         # Recurse FIRST
         deleted = self._delete(node.children[idx], key)
+        child = node.children[idx]
+        
+        if child.leaf:
+            min_keys = math.ceil((self.order - 1) / 2)
+        else:
+            min_keys = math.ceil(self.order / 2) - 1
+
         if not deleted:
             return False
 
@@ -207,12 +167,18 @@ class BPlusTree:
         if len(node.children[idx].keys) < min_keys:
             self._fill_child(node, idx)
 
+        if child.leaf and idx > 0 and idx < len(node.children) and len(node.children[idx].keys) > 0:
+            node.keys[idx - 1] = node.children[idx].keys[0]
+
         return True
 
     def _fill_child(self, node, index):
 
-        import math
-        min_keys = math.ceil(self.order / 2) - 1
+        if node.children[index].leaf:
+            min_keys = math.ceil((self.order - 1) / 2)
+        else:
+            min_keys = math.ceil(self.order / 2) - 1
+
 
         # Try borrow from previous sibling
         if index - 1 >= 0 and len(node.children[index - 1].keys) > min_keys:
@@ -225,10 +191,10 @@ class BPlusTree:
             return
 
         # Otherwise merge with a sibling
-        if index + 1 < len(node.children):
-            self._merge(node, index)
+        if index - 1 >= 0:
+            self._merge(node, index-1)
         else:
-            self._merge(node, index - 1)
+            self._merge(node, index)
 
     def _borrow_from_prev ( self , node , index ) :
         # Borrow a key from the left sibling to prevent underflow.
@@ -293,87 +259,136 @@ class BPlusTree:
             node.children.pop(index + 1)
             node.keys.pop(index)
 
-    def update ( self , key , new_value ) :
-        # Update value associated with an existing key. Return True if successful.
+    def update(self, key, new_value):
+        # 1. Traverse to the correct leaf
+        leaf = self._find_leaf(key)
 
-        node=self.root
-        while(node.leaf!=True):
-            l=len(node.keys)
-            if(key>= node.keys[l-1]):
-                node=node.children[l]
-                continue
-            for i in range(0,l):
-                if(key< node.keys[i]):
-                    node=node.children[i]
-                    break
+        # 2. Binary search within the leaf
+        idx = bisect.bisect_left(leaf.keys, key)
 
-        l=len(node.keys)
-        for i in range(0,l):
-            if(node.keys[i]==key):
-                node.values[i]=new_value
-                return True
+        # 3. Update if found
+        if idx < len(leaf.keys) and leaf.keys[idx] == key:
+            leaf.values[idx] = new_value
+            return True
 
         return False
 
 
-    def range_query ( self , start_key , end_key ):
-        """
-        Return all key-value pairs where start_key <= key <= end_key.
-        Traverse leaf nodes using the following pointers for efficient range scans.
-        """
-        ans={}
-        node=self.root
-        while(node.leaf!=True):
-            l=len(node.keys)
-            if(start_key>= node.keys[l-1]):
-                node=node.children[l]
-                continue
-            for i in range(0,l):
-                if(start_key< node.keys[i]):
-                    node=node.children[i]
-                    break
+    def range_query(self, start_key, end_key):
+        # VALID FIX: Return a list instead of a dict
+        result = []
+        node = self._find_leaf(start_key)
+        idx = bisect.bisect_left(node.keys, start_key)
+
+        while node is not None:
+            while idx < len(node.keys):
+                if node.keys[idx] > end_key:
+                    return result
+
+                # VALID FIX: Append as a tuple
+                result.append((node.keys[idx], node.values[idx]))
+                idx += 1
+
+            node = node.next
+            idx = 0
+
+        return result
+
+    def get_all(self):
+        # VALID FIX: Return a list instead of a dict
+        node = self.root
+        while not node.leaf:
+            node = node.children[0]
+
+        result = []
+        while node is not None:
+            for i in range(len(node.keys)):
+                # VALID FIX: Append as a tuple
+                result.append((node.keys[i], node.values[i]))
+            node = node.next
+
+        return result
 
 
-        while(node!=None):
-            for i in range(0,len(node.keys)):
-                if(node.keys[i]>=start_key):
-                    j=i
-                    while(node!= None):
-                        while(j<len(node.keys)):
-                            if(node.keys[j]>end_key):
-                                return ans
-                            ans[node.keys[j]]=node.values[j]
-                            j+=1
-                        node=node.next
-                        j=0
-                    return ans
-            node=node.next
+    def visualize_tree(self):
+        # Generate Graphviz representation of the B+ tree structure.
+        try:
+            import graphviz
+        except ImportError:
+            print("Graphviz is not installed. Please run: pip install graphviz")
+            return None
 
-        return {}
+        # FIX: Changed shape to 'none' so Graphviz doesn't crash on flat edges
+        dot = graphviz.Digraph(name="BPlusTree", node_attr={'shape': 'none'})
+        
+        self._add_nodes(dot, self.root)
+        self._add_edges(dot, self.root)
+        
+        return dot
 
-    def get_all ( self ) :
-        node=self.root
-        while(node.leaf!=True):
-            node=node.children[0]
-        ans={}
-        while(node!= None):
-            i=0
-            while(i<len(node.keys)):
-                ans[node.keys[i]]=node.values[i]
-                i+=1
-            node=node.next
+    def _add_nodes(self, dot, node):
+        # Recursively add nodes to Graphviz object (for visualisation)
+        if node is None:
+            return
 
-        return ans
+        # FIX: Build an HTML-like table string to draw the array boxes safely
+        if len(node.keys) == 0:
+            label = '<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0"><TR><TD>EMPTY</TD></TR></TABLE>>'
+        else:
+            # Create a table cell <TD> for each key
+            tds = "".join(f"<TD>{k}</TD>" for k in node.keys)
+            label = f'<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0"><TR>{tds}</TR></TABLE>>'
+            
+        # Add the node to the graph
+        dot.node(str(id(node)), label)
+
+        # Recurse for children
+        if not node.leaf:
+            for child in node.children:
+                self._add_nodes(dot, child)
+
+    def _add_edges(self, dot, node):
+        # Add edges between nodes and dashed lines for leaf connections
+        if node is None:
+            return
+
+        # Add solid lines from parent to children
+        if not node.leaf:
+            for child in node.children:
+                dot.edge(str(id(node)), str(id(child)))
+                self._add_edges(dot, child)
+
+        # Add dashed lines for the linked list at the leaf level
+        if node.leaf and node.next is not None:
+            # constraint="false" keeps the graph from pushing the linked leaf down a level
+            dot.edge(str(id(node)), str(id(node.next)), style="dashed", constraint="false")
+
+if __name__ == "__main__":
+    # 1. Create the tree
+    tree = BPlusTree(order=4)
+    
+    # 2. Insert some data so the tree actually has structure to show
+    keys_to_insert = [
+        50, 25, 75, 10, 30, 60, 80, 5, 15, 27, 35, 55, 65, 
+        78, 90, 2, 8, 12, 18, 40, 45, 70, 85, 95, 100
+    ]
+    for key in keys_to_insert:
+        tree.insert(key, f"Value_{key}")
+
+    # 3. Call the visualization method we just wrote
+    # tree.delete(90)
+    # # tree.delete(95)
+    # tree.insert(13,1)
+    # tree.insert(16,1)
+    # tree.insert(14,1)
+    # tree.insert(9,1)
 
 
-    # def visualize_tree ( self ):
-    #     # Generate Graphviz representation of the B+ tree structure .
-    #     pass
+    dot = tree.visualize_tree()
 
-    # def _add_nodes ( self , dot , node ) :
-    #     # Recursively add nodes to Graphviz object (for visualisation.
-    #     pass
-
-    # def _add_edges ( self , dot , node ) :
-    #     # Add edges between nodes and dashed lines for leaf connections (for visualisation
-    #     pass
+    if dot:
+        # 4. Render and view
+        # This saves 'my_bplus_tree.pdf' in your folder and opens it immediately.
+        # You can change format='pdf' to format='png' if you prefer an image file.
+        print("Generating B+ Tree visualization...")
+        dot.render('my_bplus_tree', view=True, format='pdf')
