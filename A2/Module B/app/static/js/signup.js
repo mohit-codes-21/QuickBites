@@ -158,7 +158,7 @@ async function handleSignup(event) {
         localStorage.setItem("qb_portal", activeRole);
         showToast("Signup successful. Redirecting to dashboard...");
         setTimeout(() => {
-            window.location.href = "/";
+            window.location.href = activeRole === "Customer" ? "/customer" : "/";
         }, 500);
     } catch (err) {
         showToast(err.message, true);

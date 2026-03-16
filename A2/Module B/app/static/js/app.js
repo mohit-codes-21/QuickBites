@@ -329,6 +329,10 @@ async function handleLogin(event) {
 
         setAuthToken(payload.data.token);
         setActivePortal(payload.data.member.activeRole || loginAs);
+        if ((payload.data.member.activeRole || loginAs) === "Customer") {
+            window.location.href = "/customer";
+            return;
+        }
         await loadCurrentUser();
         selectors.portfolioInput.value = state.user.memberID;
         await loadPortfolio(state.user.memberID);
@@ -549,6 +553,11 @@ function bindEvents() {
 
 async function bootstrap() {
     bindEvents();
+
+    if (state.token && state.activePortal === "Customer") {
+        window.location.href = "/customer";
+        return;
+    }
 
     if (!state.token) {
         renderAuthState();

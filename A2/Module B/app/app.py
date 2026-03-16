@@ -211,6 +211,35 @@ def signup_page():
     return render_template("signup.html")
 
 
+def render_customer_page(page_title, page_name):
+    return render_template("customer_page.html", page_title=page_title, page_name=page_name)
+
+
+@app.route("/customer")
+def customer_home():
+    return render_customer_page("Discover Great Food", "home")
+
+
+@app.route("/customer/profile")
+def customer_profile_page():
+    return render_customer_page("Your Profile", "profile")
+
+
+@app.route("/customer/restaurants")
+def customer_restaurants_page():
+    return render_customer_page("Restaurants", "restaurants")
+
+
+@app.route("/customer/browse")
+def customer_browse_page():
+    return render_customer_page("Browse Menu", "browse")
+
+
+@app.route("/customer/cart")
+def customer_cart_page():
+    return render_customer_page("Your Cart", "cart")
+
+
 @app.post("/api/auth/login")
 def login():
     data = request.get_json(silent=True) or {}

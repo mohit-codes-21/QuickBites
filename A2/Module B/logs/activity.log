@@ -158,3 +158,66 @@
 {"timestamp": "2026-03-16T06:33:19.590950Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/portfolio/31", "ip": "127.0.0.1"}}
 {"timestamp": "2026-03-16T06:33:19.653495Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/menu-items", "ip": "127.0.0.1"}}
 {"timestamp": "2026-03-16T06:33:19.654691Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/customer/orders", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:49:09.826975Z", "event": "REQUEST", "details": {"method": "GET", "path": "/", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:49:10.171358Z", "event": "REQUEST", "details": {"method": "GET", "path": "/customer", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:49:10.358527Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/auth/me", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:49:10.569367Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/restaurants", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:49:10.613430Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/menu-items", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:49:35.875704Z", "event": "REQUEST", "details": {"method": "POST", "path": "/api/auth/logout", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:49:35.928542Z", "event": "LOGOUT", "details": {"memberID": 31, "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:49:35.945678Z", "event": "REQUEST", "details": {"method": "GET", "path": "/", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:49:51.251133Z", "event": "REQUEST", "details": {"method": "POST", "path": "/api/auth/login", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:49:51.569707Z", "event": "LOGIN_SUCCESS", "details": {"memberID": 31, "email": "bhavya.parmar@iitgn.ac.in", "activeRole": "Customer", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:49:51.584880Z", "event": "REQUEST", "details": {"method": "GET", "path": "/customer", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:49:51.728751Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/auth/me", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:49:51.797803Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/restaurants", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:49:51.799018Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/menu-items", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:49:54.901591Z", "event": "REQUEST", "details": {"method": "GET", "path": "/customer/restaurants", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:49:55.014906Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/auth/me", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:49:55.088681Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/restaurants", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:50:06.694515Z", "event": "REQUEST", "details": {"method": "GET", "path": "/customer/browse", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:50:06.812056Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/auth/me", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:50:06.873117Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/menu-items", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:50:13.383108Z", "event": "REQUEST", "details": {"method": "GET", "path": "/customer/cart", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:50:13.500297Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/auth/me", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:50:32.265544Z", "event": "REQUEST", "details": {"method": "GET", "path": "/customer/profile", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:50:32.410062Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/auth/me", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:50:32.486309Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/portfolio/31", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:50:37.069306Z", "event": "REQUEST", "details": {"method": "GET", "path": "/customer/cart", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:50:37.221138Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/auth/me", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:50:38.068559Z", "event": "REQUEST", "details": {"method": "GET", "path": "/customer/browse", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:50:38.187981Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/auth/me", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:50:38.260368Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/menu-items", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:50:45.092184Z", "event": "REQUEST", "details": {"method": "GET", "path": "/customer/restaurants", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:50:45.225599Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/auth/me", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:50:45.289411Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/restaurants", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:50:54.656646Z", "event": "REQUEST", "details": {"method": "GET", "path": "/customer", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:50:54.774081Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/auth/me", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:50:54.847421Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/restaurants", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:50:54.847647Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/menu-items", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:50:56.834602Z", "event": "REQUEST", "details": {"method": "POST", "path": "/api/auth/logout", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:50:56.901812Z", "event": "LOGOUT", "details": {"memberID": 31, "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:50:56.915706Z", "event": "REQUEST", "details": {"method": "GET", "path": "/", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:58:13.046971Z", "event": "REQUEST", "details": {"method": "POST", "path": "/api/auth/login", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:58:13.380989Z", "event": "LOGIN_SUCCESS", "details": {"memberID": 1, "email": "aman.shah1@example.com", "activeRole": "Customer", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:58:13.395309Z", "event": "REQUEST", "details": {"method": "GET", "path": "/customer", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:58:13.550825Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/auth/me", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:58:13.633267Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/restaurants", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:58:25.164899Z", "event": "REQUEST", "details": {"method": "GET", "path": "/customer/cart", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:58:25.279220Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/auth/me", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:58:32.759108Z", "event": "REQUEST", "details": {"method": "GET", "path": "/customer/restaurants", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:58:32.873083Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/auth/me", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:58:32.943176Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/restaurants", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:58:45.650254Z", "event": "REQUEST", "details": {"method": "GET", "path": "/customer/profile", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:58:45.736188Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/auth/me", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:58:45.827737Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/portfolio/1", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:58:55.378514Z", "event": "REQUEST", "details": {"method": "GET", "path": "/customer/browse", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:58:55.458664Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/auth/me", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:58:55.541554Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/menu-items", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:59:09.852883Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/menu-items", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:59:14.617194Z", "event": "REQUEST", "details": {"method": "POST", "path": "/api/auth/logout", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:59:14.692470Z", "event": "LOGOUT", "details": {"memberID": 1, "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:59:14.705737Z", "event": "REQUEST", "details": {"method": "GET", "path": "/", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T07:15:38.617974Z", "event": "REQUEST", "details": {"method": "GET", "path": "/", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T07:16:00.044110Z", "event": "REQUEST", "details": {"method": "GET", "path": "/", "ip": "10.7.30.228"}}
+{"timestamp": "2026-03-16T07:16:00.584076Z", "event": "REQUEST", "details": {"method": "GET", "path": "/favicon.ico", "ip": "10.7.30.228"}}
