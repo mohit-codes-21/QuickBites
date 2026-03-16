@@ -1,0 +1,160 @@
+{"timestamp": "2026-03-15T10:23:30.646274Z", "event": "REQUEST", "details": {"method": "GET", "path": "/", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T10:23:33.453180Z", "event": "REQUEST", "details": {"method": "GET", "path": "/signup", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T10:28:30.003262Z", "event": "REQUEST", "details": {"method": "GET", "path": "/", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T10:28:34.591557Z", "event": "REQUEST", "details": {"method": "GET", "path": "/signup", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T10:30:34.114744Z", "event": "REQUEST", "details": {"method": "POST", "path": "/api/auth/signup", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T10:30:34.677511Z", "event": "SIGNUP_SUCCESS", "details": {"memberID": 31, "signupAs": "DeliveryPartner", "email": "bhavya.parmar@iitgn.ac.in", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T10:30:34.679643Z", "event": "AUTO_LOGIN_AFTER_SIGNUP", "details": {"memberID": 31, "activeRole": "DeliveryPartner", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T10:30:35.297111Z", "event": "REQUEST", "details": {"method": "GET", "path": "/", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T10:30:35.425635Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/auth/me", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T10:30:35.531545Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/portfolio/31", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T10:39:22.174776Z", "event": "REQUEST", "details": {"method": "GET", "path": "/", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T10:39:26.977055Z", "event": "REQUEST", "details": {"method": "GET", "path": "/signup", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T10:40:16.177676Z", "event": "REQUEST", "details": {"method": "POST", "path": "/api/auth/signup", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T10:40:55.616846Z", "event": "REQUEST", "details": {"method": "POST", "path": "/api/auth/signup", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T10:40:56.414253Z", "event": "SIGNUP_SUCCESS", "details": {"memberID": 32, "signupAs": "DeliveryPartner", "email": "abc@email.com", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T10:40:56.418270Z", "event": "AUTO_LOGIN_AFTER_SIGNUP", "details": {"memberID": 32, "activeRole": "DeliveryPartner", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T10:40:56.976241Z", "event": "REQUEST", "details": {"method": "GET", "path": "/", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T10:40:57.117203Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/auth/me", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T10:40:57.245659Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/portfolio/32", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T10:49:04.825395Z", "event": "REQUEST", "details": {"method": "GET", "path": "/", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T10:49:08.335708Z", "event": "REQUEST", "details": {"method": "GET", "path": "/signup", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T10:49:31.449658Z", "event": "REQUEST", "details": {"method": "POST", "path": "/api/auth/signup", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T10:49:38.426430Z", "event": "REQUEST", "details": {"method": "POST", "path": "/api/auth/signup", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T10:49:39.209484Z", "event": "SIGNUP_SUCCESS", "details": {"memberID": 33, "signupAs": "Member", "email": "bhavya@iitgn.ac.in", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T10:49:39.214803Z", "event": "AUTO_LOGIN_AFTER_SIGNUP", "details": {"memberID": 33, "activeRole": "Customer", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T10:49:39.775751Z", "event": "REQUEST", "details": {"method": "GET", "path": "/", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T10:49:39.929371Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/auth/me", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T10:49:40.069249Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/portfolio/33", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T10:49:40.221719Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/menu-items", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T10:49:40.227538Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/customer/orders", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T10:49:54.274739Z", "event": "REQUEST", "details": {"method": "POST", "path": "/api/auth/logout", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T10:49:54.413223Z", "event": "LOGOUT", "details": {"memberID": 33, "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T10:50:05.084478Z", "event": "REQUEST", "details": {"method": "GET", "path": "/admin", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T10:50:11.856757Z", "event": "REQUEST", "details": {"method": "POST", "path": "/api/auth/login", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T10:50:12.676797Z", "event": "LOGIN_SUCCESS", "details": {"memberID": 1, "email": "aman.shah1@example.com", "activeRole": "Admin", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T10:50:12.693384Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/auth/me", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T10:50:12.827321Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/portfolio/1", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T10:50:12.999758Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/menu-items", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T10:50:13.048113Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/customer/orders", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T10:50:13.094329Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/delivery/assignments", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T10:50:13.107824Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/restaurants", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T10:51:16.782436Z", "event": "REQUEST", "details": {"method": "DELETE", "path": "/api/admin/members/31", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T10:51:23.539963Z", "event": "REQUEST", "details": {"method": "DELETE", "path": "/api/admin/members/31", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T10:51:29.343174Z", "event": "REQUEST", "details": {"method": "DELETE", "path": "/api/admin/members/32", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T10:51:33.694922Z", "event": "REQUEST", "details": {"method": "DELETE", "path": "/api/admin/members/33", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T10:51:54.206416Z", "event": "REQUEST", "details": {"method": "POST", "path": "/api/auth/logout", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T10:51:54.386280Z", "event": "LOGOUT", "details": {"memberID": 1, "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T10:52:30.852493Z", "event": "REQUEST", "details": {"method": "GET", "path": "/", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T10:52:33.407850Z", "event": "REQUEST", "details": {"method": "GET", "path": "/signup", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T10:53:13.245688Z", "event": "REQUEST", "details": {"method": "POST", "path": "/api/auth/signup", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T10:53:14.049872Z", "event": "SIGNUP_SUCCESS", "details": {"memberID": 31, "signupAs": "DeliveryPartner", "email": "bhavya.parmar@iitgn.ac.in", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T10:53:14.052820Z", "event": "AUTO_LOGIN_AFTER_SIGNUP", "details": {"memberID": 31, "activeRole": "DeliveryPartner", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T10:53:14.619160Z", "event": "REQUEST", "details": {"method": "GET", "path": "/", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T10:53:14.794187Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/auth/me", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T10:53:14.906649Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/portfolio/31", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T10:53:15.050041Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/delivery/assignments", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T10:53:20.103639Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/delivery/assignments", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T10:53:22.324706Z", "event": "REQUEST", "details": {"method": "POST", "path": "/api/auth/logout", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T10:53:22.502070Z", "event": "LOGOUT", "details": {"memberID": 31, "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T10:53:37.963915Z", "event": "REQUEST", "details": {"method": "POST", "path": "/api/auth/login", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T10:53:38.766642Z", "event": "LOGIN_SUCCESS", "details": {"memberID": 1, "email": "aman.shah1@example.com", "activeRole": "Customer", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T10:53:38.781143Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/auth/me", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T10:53:38.910276Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/portfolio/1", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T10:53:39.053297Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/menu-items", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T10:53:39.053809Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/customer/orders", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T10:56:59.623848Z", "event": "REQUEST", "details": {"method": "POST", "path": "/api/auth/logout", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T10:56:59.737174Z", "event": "LOGOUT", "details": {"memberID": 1, "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T11:12:00.696151Z", "event": "REQUEST", "details": {"method": "GET", "path": "/", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T11:12:01.978234Z", "event": "REQUEST", "details": {"method": "GET", "path": "/favicon.ico", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T11:12:33.722798Z", "event": "REQUEST", "details": {"method": "POST", "path": "/api/auth/login", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T11:13:06.313501Z", "event": "REQUEST", "details": {"method": "POST", "path": "/api/auth/login", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T11:13:49.185428Z", "event": "REQUEST", "details": {"method": "GET", "path": "/", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T11:14:04.457110Z", "event": "REQUEST", "details": {"method": "POST", "path": "/api/auth/login", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T11:16:07.975226Z", "event": "REQUEST", "details": {"method": "GET", "path": "/", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T11:16:19.733041Z", "event": "REQUEST", "details": {"method": "POST", "path": "/api/auth/login", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T11:16:20.809421Z", "event": "LOGIN_SUCCESS", "details": {"memberID": 1, "email": "aman.shah1@example.com", "activeRole": "Customer", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T11:16:20.822761Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/auth/me", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T11:16:21.043485Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/portfolio/1", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T11:16:21.231059Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/menu-items", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T11:16:21.234780Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/customer/orders", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T11:17:03.381590Z", "event": "REQUEST", "details": {"method": "POST", "path": "/api/auth/logout", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T11:17:03.538089Z", "event": "LOGOUT", "details": {"memberID": 1, "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T11:17:13.169876Z", "event": "REQUEST", "details": {"method": "GET", "path": "/admin", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T11:17:20.884452Z", "event": "REQUEST", "details": {"method": "POST", "path": "/api/auth/login", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T11:17:21.690876Z", "event": "LOGIN_SUCCESS", "details": {"memberID": 1, "email": "aman.shah1@example.com", "activeRole": "Admin", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T11:17:21.703041Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/auth/me", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T11:17:21.856711Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/portfolio/1", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T11:17:22.102522Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/menu-items", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T11:17:22.103897Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/customer/orders", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T11:17:22.106195Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/restaurants", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T11:17:22.110315Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/delivery/assignments", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T11:17:35.783787Z", "event": "REQUEST", "details": {"method": "POST", "path": "/api/auth/logout", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T11:17:35.963270Z", "event": "LOGOUT", "details": {"memberID": 1, "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T11:17:41.172022Z", "event": "REQUEST", "details": {"method": "POST", "path": "/api/auth/login", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T11:17:42.031464Z", "event": "LOGIN_SUCCESS", "details": {"memberID": 1, "email": "aman.shah1@example.com", "activeRole": "Admin", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T11:17:42.043775Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/auth/me", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T11:17:42.213955Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/portfolio/1", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T11:17:42.457550Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/menu-items", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T11:17:42.462401Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/customer/orders", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T11:17:42.464393Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/delivery/assignments", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T11:17:42.467635Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/restaurants", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T11:18:59.982603Z", "event": "REQUEST", "details": {"method": "DELETE", "path": "/api/admin/members/31", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T11:20:27.011609Z", "event": "REQUEST", "details": {"method": "POST", "path": "/api/admin/members", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T11:20:33.397988Z", "event": "REQUEST", "details": {"method": "POST", "path": "/api/auth/logout", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T11:20:33.499396Z", "event": "LOGOUT", "details": {"memberID": 1, "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T11:20:38.626547Z", "event": "REQUEST", "details": {"method": "GET", "path": "/", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T11:20:41.313297Z", "event": "REQUEST", "details": {"method": "GET", "path": "/signup", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T11:22:00.628711Z", "event": "REQUEST", "details": {"method": "GET", "path": "/", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-15T11:22:09.080301Z", "event": "REQUEST", "details": {"method": "GET", "path": "/signup", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:14:26.937278Z", "event": "REQUEST", "details": {"method": "GET", "path": "/", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:14:27.332165Z", "event": "REQUEST", "details": {"method": "GET", "path": "/favicon.ico", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:14:42.810918Z", "event": "REQUEST", "details": {"method": "GET", "path": "/signup", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:14:57.387649Z", "event": "REQUEST", "details": {"method": "POST", "path": "/api/auth/signup", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:14:57.847864Z", "event": "SIGNUP_SUCCESS", "details": {"memberID": 31, "signupAs": "Member", "email": "bhavya.parmar@iitgn.ac.in", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:14:57.857537Z", "event": "AUTO_LOGIN_AFTER_SIGNUP", "details": {"memberID": 31, "activeRole": "Customer", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:14:58.386718Z", "event": "REQUEST", "details": {"method": "GET", "path": "/", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:14:58.477770Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/auth/me", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:14:58.563690Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/portfolio/31", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:14:58.652968Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/menu-items", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:14:58.653186Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/customer/orders", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:15:06.621734Z", "event": "REQUEST", "details": {"method": "POST", "path": "/api/auth/logout", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:15:06.705101Z", "event": "LOGOUT", "details": {"memberID": 31, "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:15:09.664846Z", "event": "REQUEST", "details": {"method": "GET", "path": "/signup", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:15:49.430532Z", "event": "REQUEST", "details": {"method": "POST", "path": "/api/auth/signup", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:15:49.776191Z", "event": "SIGNUP_SUCCESS", "details": {"memberID": 32, "signupAs": "DeliveryPartner", "email": "abc@email.com", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:15:49.776875Z", "event": "AUTO_LOGIN_AFTER_SIGNUP", "details": {"memberID": 32, "activeRole": "DeliveryPartner", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:15:50.308459Z", "event": "REQUEST", "details": {"method": "GET", "path": "/", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:15:50.446703Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/auth/me", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:15:50.509767Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/portfolio/32", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:15:50.575231Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/delivery/assignments", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:15:53.587902Z", "event": "REQUEST", "details": {"method": "POST", "path": "/api/auth/logout", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:15:53.638698Z", "event": "LOGOUT", "details": {"memberID": 32, "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:15:59.749547Z", "event": "REQUEST", "details": {"method": "GET", "path": "/signup", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:16:15.243772Z", "event": "REQUEST", "details": {"method": "GET", "path": "/", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:16:19.728016Z", "event": "REQUEST", "details": {"method": "GET", "path": "/admin", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:16:29.596009Z", "event": "REQUEST", "details": {"method": "POST", "path": "/api/auth/login", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:16:29.872258Z", "event": "LOGIN_SUCCESS", "details": {"memberID": 1, "email": "aman.shah1@example.com", "activeRole": "Admin", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:16:29.879117Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/auth/me", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:16:29.941632Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/portfolio/1", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:16:30.012949Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/menu-items", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:16:30.016926Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/customer/orders", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:16:30.017991Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/delivery/assignments", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:16:30.020915Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/restaurants", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:17:31.973667Z", "event": "REQUEST", "details": {"method": "DELETE", "path": "/api/admin/members/31", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:17:42.219189Z", "event": "REQUEST", "details": {"method": "DELETE", "path": "/api/admin/members/32", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:30:12.254324Z", "event": "REQUEST", "details": {"method": "DELETE", "path": "/api/admin/members/1", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:31:24.579786Z", "event": "REQUEST", "details": {"method": "POST", "path": "/api/auth/logout", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:31:24.641299Z", "event": "LOGOUT", "details": {"memberID": 1, "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:31:39.290079Z", "event": "REQUEST", "details": {"method": "GET", "path": "/", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:31:41.259294Z", "event": "REQUEST", "details": {"method": "GET", "path": "/signup", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:32:34.286965Z", "event": "REQUEST", "details": {"method": "GET", "path": "/", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:33:04.293712Z", "event": "REQUEST", "details": {"method": "GET", "path": "/signup", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:33:18.591385Z", "event": "REQUEST", "details": {"method": "POST", "path": "/api/auth/signup", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:33:18.904374Z", "event": "SIGNUP_SUCCESS", "details": {"memberID": 31, "signupAs": "Member", "email": "bhavya.parmar@iitgn.ac.in", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:33:18.905824Z", "event": "AUTO_LOGIN_AFTER_SIGNUP", "details": {"memberID": 31, "activeRole": "Customer", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:33:19.434718Z", "event": "REQUEST", "details": {"method": "GET", "path": "/", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:33:19.527570Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/auth/me", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:33:19.590950Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/portfolio/31", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:33:19.653495Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/menu-items", "ip": "127.0.0.1"}}
+{"timestamp": "2026-03-16T06:33:19.654691Z", "event": "REQUEST", "details": {"method": "GET", "path": "/api/customer/orders", "ip": "127.0.0.1"}}

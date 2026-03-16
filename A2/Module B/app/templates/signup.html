@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>QuickBites Sign Up</title>
+    <link rel="stylesheet" href="/static/css/styles.css" />
+</head>
+<body>
+    <div class="bg-orb bg-orb-a"></div>
+    <div class="bg-orb bg-orb-b"></div>
+
+    <header class="hero">
+        <h1>QuickBites</h1>
+        <p>Create a new account to join the platform.</p>
+    </header>
+
+    <main class="layout">
+        <section class="card auth-card">
+            <h2>Sign Up</h2>
+            <form id="signup-form">
+                <label>Sign Up As</label>
+                <select id="signup-as" required>
+                    <option value="" selected disabled>Select account type</option>
+                    <option value="Member">Member</option>
+                    <option value="DeliveryPartner">Delivery Agent</option>
+                    <option value="Restaurant">Restaurant</option>
+                </select>
+
+                <div id="signup-member-fields" class="signup-section hidden">
+                    <label>Name</label>
+                    <input type="text" id="signup-member-name" placeholder="full name" />
+                    <label>Email</label>
+                    <input type="email" id="signup-member-email" placeholder="email" />
+                    <label>Password</label>
+                    <input type="password" id="signup-member-password" placeholder="password" />
+                    <label>Phone Number</label>
+                    <input type="text" id="signup-member-phone" placeholder="10-digit phone" maxlength="10" />
+                </div>
+
+                <div id="signup-delivery-fields" class="signup-section hidden">
+                    <label>Vehicle Number</label>
+                    <input type="text" id="signup-delivery-vehicle" placeholder="vehicle number" />
+                    <label>License ID</label>
+                    <input type="text" id="signup-delivery-license" placeholder="license id" />
+                    <label>Date of Birth</label>
+                    <input type="date" id="signup-delivery-dob" />
+                    <button type="button" id="signup-detect-delivery-location" class="btn-secondary">Use My Current Location</button>
+                    <input type="hidden" id="signup-delivery-lat" />
+                    <input type="hidden" id="signup-delivery-lng" />
+                    <p id="signup-delivery-location-text" class="hint">Location not detected yet.</p>
+                    <label class="check"><input type="checkbox" id="signup-delivery-online" /> Is Online</label>
+                </div>
+
+                <div id="signup-restaurant-fields" class="signup-section hidden">
+                    <label>Restaurant Name</label>
+                    <input type="text" id="signup-restaurant-name" placeholder="restaurant name" />
+                    <label>Contact Phone</label>
+                    <input type="text" id="signup-restaurant-phone" placeholder="contact phone" maxlength="10" />
+                    <label class="check"><input type="checkbox" id="signup-restaurant-open" checked /> Is Open</label>
+                    <label class="check"><input type="checkbox" id="signup-restaurant-verified" /> Is Verified</label>
+                    <label>Average Rating (Optional)</label>
+                    <input type="number" min="1" max="5" step="0.1" id="signup-restaurant-rating" placeholder="e.g. 4.2" />
+                    <label>Address Line</label>
+                    <input type="text" id="signup-restaurant-address" placeholder="address line" />
+                    <label>City</label>
+                    <input type="text" id="signup-restaurant-city" placeholder="city" />
+                    <label>Zip Code</label>
+                    <input type="text" id="signup-restaurant-zip" placeholder="6-digit zipcode" maxlength="6" />
+                    <button type="button" id="signup-detect-restaurant-location" class="btn-secondary">Use My Current Location</button>
+                    <input type="hidden" id="signup-restaurant-lat" />
+                    <input type="hidden" id="signup-restaurant-lng" />
+                    <p id="signup-restaurant-location-text" class="hint">Location not detected yet.</p>
+                    <label class="check"><input type="checkbox" id="signup-restaurant-discontinued" /> Discontinued</label>
+                </div>
+
+                <button type="submit">Create Account</button>
+                <a href="/" class="auth-link-btn btn-secondary">Back To Login</a>
+            </form>
+            <p class="hint">You can login from your chosen portal after successful signup.</p>
+        </section>
+    </main>
+
+    <div id="toast" class="toast hidden"></div>
+    <script src="/static/js/signup.js"></script>
+</body>
+</html>

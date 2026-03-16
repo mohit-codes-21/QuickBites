@@ -182,37 +182,26 @@ CREATE TABLE MenuItemRating (
 -- ================= CORE SYSTEM TABLES =================
 
 -- Defines roles
-CREATE TABLE Groups (
-    groupID   INT PRIMARY KEY,
-    groupName VARCHAR(50) NOT NULL UNIQUE,  -- 'Admin', 'Customer', 'DeliveryPartner', 'RestaurantManager'
+CREATE TABLE Roles (
+    roleID   INT PRIMARY KEY,
+    roleName VARCHAR(50) NOT NULL UNIQUE,  -- 'Admin', 'Customer', 'DeliveryPartner', 'RestaurantManager'
     description VARCHAR(200)
 );
 
-INSERT INTO Groups VALUES
+INSERT INTO Roles VALUES
 (1,'Admin','Full system access'),
 (2,'Customer','Place and track orders'), 
 (3,'DeliveryPartner','Accept and deliver orders'),
 (4,'RestaurantManager','Manage restaurant and menu');
 
 -- Maps members to roles (many-to-many)
-CREATE TABLE MemberGroupMapping (
+CREATE TABLE MemberRoleMapping (
     memberID INT NOT NULL,
-    groupID  INT NOT NULL,
-    PRIMARY KEY (memberID, groupID),
+    roleID  INT NOT NULL,
+    PRIMARY KEY (memberID, roleID),
     FOREIGN KEY (memberID) REFERENCES Member(memberID) ON DELETE CASCADE ON UPDATE CASCADE,
-    FOREIGN KEY (groupID)  REFERENCES Groups(groupID)  ON DELETE CASCADE ON UPDATE CASCADE
+    FOREIGN KEY (roleID)  REFERENCES Roles(roleID)  ON DELETE CASCADE ON UPDATE CASCADE
 );
-
--- MemberGroupMapping (assign roles to members)
-INSERT INTO MemberGroupMapping(memberID, groupID) VALUES
--- Customers (memberIDs 1-10) → groupID 2
-(1,2),(2,2),(3,2),(4,2),(5,2),(6,2),(7,2),(8,2),(9,2),(10,2),
--- Delivery Partners (memberIDs 11-20) → groupID 3
-(11,3),(12,3),(13,3),(14,3),(15,3),(16,3),(17,3),(18,3),(19,3),(20,3),
--- Extra members (21-30) → groupID 2 (customers by default)
-(21,2),(22,2),(23,2),(24,2),(25,2),(26,2),(27,2),(28,2),(29,2),(30,2),
--- Make memberID 1 also an Admin (dual role)
-(1,1);
 
 -- Stores active sessions for logged-in members
 CREATE TABLE Sessions (
@@ -268,6 +257,17 @@ INSERT INTO Member(memberID, name, email, password, phoneNumber, createdAt) VALU
 (28,'Extra Eight','extra8@example.com','pwd28','9876500028','2025-09-08 09:00:00'),
 (29,'Extra Nine','extra9@example.com','pwd29','9876500029','2025-09-09 09:00:00'),
 (30,'Extra Ten','extra10@example.com','pwd30','9876500030','2025-09-10 09:00:00');
+
+-- MemberRoleMapping (assign roles to members)
+INSERT INTO `MemberRoleMapping`(memberID, roleID) VALUES
+-- Customers (memberIDs 1-10) → roleID 2
+(1,2),(2,2),(3,2),(4,2),(5,2),(6,2),(7,2),(8,2),(9,2),(10,2),
+-- Delivery Partners (memberIDs 11-20) → roleID 3
+(11,3),(12,3),(13,3),(14,3),(15,3),(16,3),(17,3),(18,3),(19,3),(20,3),
+-- Extra members (21-30) → roleID 2 (customers by default)
+(21,2),(22,2),(23,2),(24,2),(25,2),(26,2),(27,2),(28,2),(29,2),(30,2),
+-- Make memberID 1 also an Admin (dual role)
+(1,1);
 
 -- Customers 
 INSERT INTO Customer(customerID, loyaltyTier, membershipDiscount, cartTotalAmount, membershipDueDate, membership) VALUES
@@ -478,5 +478,3 @@ INSERT INTO MenuItemRating(restaurantID, itemID, orderID, rating, comment) VALUE
 (205,2,5005,4,'Icecream good'),
 (206,2,5004,4,'Second comment on sambar'),
 (210,1,5009,4,'Thali main was fine');
-
-
