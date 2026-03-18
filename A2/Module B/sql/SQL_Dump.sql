@@ -9,7 +9,8 @@ CREATE TABLE Member (
     email VARCHAR(100) NOT NULL UNIQUE,
     password VARCHAR(100) NOT NULL,
     phoneNumber CHAR(10) NOT NULL,
-    createdAt DATETIME NOT NULL
+    createdAt DATETIME NOT NULL,
+    isDeleted BOOLEAN NOT NULL DEFAULT 0
 );
 
 -- ================= CUSTOMER =================
@@ -20,6 +21,7 @@ CREATE TABLE Customer (
     cartTotalAmount DECIMAL(10,2) NOT NULL CHECK (cartTotalAmount >= 0),
     membershipDueDate DATETIME,
     membership BOOLEAN NOT NULL,
+    isDeleted BOOLEAN NOT NULL DEFAULT 0,
     FOREIGN KEY (customerID) REFERENCES Member(memberID) on delete restrict on update cascade
 );
 
@@ -34,6 +36,7 @@ CREATE TABLE DeliveryPartner (
     isOnline BOOLEAN NOT NULL,
     averageRating FLOAT CHECK (averageRating BETWEEN 1 AND 5),
     image BLOB NOT NULL,
+    isDeleted BOOLEAN NOT NULL DEFAULT 0,
     FOREIGN KEY (partnerID) REFERENCES Member(memberID) on delete restrict on update cascade
 );
 
@@ -50,7 +53,8 @@ CREATE TABLE Restaurant (
     zipCode CHAR(6) NOT NULL,
     latitude DOUBLE NOT NULL,
     longitude DOUBLE NOT NULL,
-    discontinued BOOLEAN NOT NULL
+    discontinued BOOLEAN NOT NULL,
+    isDeleted BOOLEAN NOT NULL DEFAULT 0
 );
 
 -- ================= MENU ITEM =================
@@ -261,7 +265,7 @@ INSERT INTO Member(memberID, name, email, password, phoneNumber, createdAt) VALU
 -- MemberRoleMapping (assign roles to members)
 INSERT INTO `MemberRoleMapping`(memberID, roleID) VALUES
 -- Customers (memberIDs 1-10) → roleID 2
-(1,2),(2,2),(3,2),(4,2),(5,2),(6,2),(7,2),(8,2),(9,2),(10,2),
+(2,2),(3,2),(4,2),(5,2),(6,2),(7,2),(8,2),(9,2),(10,2),
 -- Delivery Partners (memberIDs 11-20) → roleID 3
 (11,3),(12,3),(13,3),(14,3),(15,3),(16,3),(17,3),(18,3),(19,3),(20,3),
 -- Extra members (21-30) → roleID 2 (customers by default)

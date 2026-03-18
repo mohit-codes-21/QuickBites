@@ -48,6 +48,7 @@ const selectors = {
     adminNoAccess: document.getElementById("admin-no-access"),
     createMemberForm: document.getElementById("create-member-form"),
     deleteMemberForm: document.getElementById("delete-member-form"),
+    restoreMemberForm: document.getElementById("restore-member-form"),
     toast: document.getElementById("toast"),
 };
 
@@ -482,6 +483,24 @@ async function handleDeleteMember(event) {
     }
 }
 
+async function handleRestoreMember(event) {
+    event.preventDefault();
+    const formData = new FormData(event.target);
+    const memberID = Number(formData.get("memberID"));
+
+    if (!window.confirm(`Restore member ${memberID}?`)) {
+        return;
+    }
+
+    try {
+        const payload = await api(`/api/admin/members/${memberID}/restore`, { method: "POST" });
+        showToast(payload.message || "Member restored successfully");
+        event.target.reset();
+    } catch (err) {
+        showToast(err.message, true);
+    }
+}
+
 function bindEvents() {
     selectors.loginForm.addEventListener("submit", handleLogin);
     selectors.logoutBtn.addEventListener("click", handleLogout);
@@ -549,6 +568,7 @@ function bindEvents() {
     selectors.menuTableBody.addEventListener("click", handleMenuActions);
     selectors.createMemberForm.addEventListener("submit", handleCreateMember);
     selectors.deleteMemberForm.addEventListener("submit", handleDeleteMember);
+    selectors.restoreMemberForm.addEventListener("submit", handleRestoreMember);
 }
 
 async function bootstrap() {

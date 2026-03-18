@@ -113,7 +113,7 @@ def get_current_user(connection):
         SELECT s.sessionToken, s.memberID, s.expiresAt, m.name, m.email
         FROM Sessions s
         JOIN Member m ON m.memberID = s.memberID
-        WHERE s.sessionToken = %s AND s.expiresAt > NOW()
+        WHERE s.sessionToken = %s AND s.expiresAt > NOW() AND m.isDeleted = 0
         """,
         (token,),
     )
@@ -180,6 +180,70 @@ def close_request_connection():
     if conn and conn.is_connected():
         conn.close()
         request.db_connection = None
+
+
+def calculate_customer_cart_total(connection, customer_id):
+    cursor = connection.cursor(dictionary=True)
+    cursor.execute(
+        """
+        SELECT COALESCE(SUM(ci.quantity * mi.appPrice), 0) AS total
+        FROM CartItem ci
+        JOIN MenuItem mi ON mi.restaurantID = ci.restaurantID AND mi.itemID = ci.itemID
+        WHERE ci.customerID = %s
+        """,
+        (customer_id,),
+    )
+    return float(cursor.fetchone()["total"])
+
+
+def update_customer_cart_total(connection, customer_id):
+    total = calculate_customer_cart_total(connection, customer_id)
+    cursor = connection.cursor()
+    cursor.execute("UPDATE Customer SET cartTotalAmount = %s WHERE customerID = %s", (total, customer_id))
+    return total
+
+
+def get_selected_address_id(connection, customer_id):
+    cursor = connection.cursor(dictionary=True)
+    cursor.execute(
+        """
+        SELECT addressID
+        FROM Address
+        WHERE customerID = %s AND isSaved = 1
+        ORDER BY addressID
+        LIMIT 1
+        """,
+        (customer_id,),
+    )
+    row = cursor.fetchone()
+    return row["addressID"] if row else None
+
+
+def expire_pending_order_payments(connection, customer_id=None):
+    cursor = connection.cursor()
+    if customer_id is None:
+        cursor.execute(
+            """
+            UPDATE Payment
+            SET status = 'Failed'
+            WHERE paymentFor = 'Order'
+              AND status = 'Pending'
+              AND transactionTime <= (NOW() - INTERVAL 2 MINUTE)
+            """
+        )
+    else:
+        cursor.execute(
+            """
+            UPDATE Payment
+            SET status = 'Failed'
+            WHERE paymentFor = 'Order'
+              AND status = 'Pending'
+              AND customerID = %s
+              AND transactionTime <= (NOW() - INTERVAL 2 MINUTE)
+            """,
+            (customer_id,),
+        )
+    return cursor.rowcount
 
 
 @app.before_request
@@ -260,7 +324,7 @@ def login():
         connection = get_db_connection()
         cursor = connection.cursor(dictionary=True)
         cursor.execute(
-            "SELECT memberID, name, email, password FROM Member WHERE email = %s",
+            "SELECT memberID, name, email, password, isDeleted FROM Member WHERE email = %s",
             (email,),
         )
         member = cursor.fetchone()
@@ -268,6 +332,10 @@ def login():
         if not member:
             write_activity_log("LOGIN_FAILED", {"email": email, "reason": "member_not_found", "ip": request.remote_addr})
             return json_response(status=401, message="Invalid credentials")
+
+        if int(member.get("isDeleted", 0)) == 1:
+            write_activity_log("LOGIN_FAILED", {"email": email, "reason": "account_deleted", "ip": request.remote_addr})
+            return json_response(status=403, message="This account has been deleted")
 
         if not verify_and_migrate_password(connection, member["memberID"], password, member["password"]):
             write_activity_log("LOGIN_FAILED", {"email": email, "reason": "wrong_password", "ip": request.remote_addr})
@@ -360,26 +428,41 @@ def signup():
         connection = get_db_connection()
         cursor = connection.cursor(dictionary=True)
 
-        cursor.execute("SELECT COUNT(*) AS countVal FROM Member WHERE email = %s", (member_email,))
-        if cursor.fetchone()["countVal"] > 0:
+        cursor.execute("SELECT memberID, isDeleted FROM Member WHERE email = %s", (member_email,))
+        existing_member = cursor.fetchone()
+
+        is_reactivated = False
+        if existing_member and int(existing_member.get("isDeleted", 0)) == 0:
             return json_response(status=409, message="Email already exists")
 
-        cursor.execute("SELECT COALESCE(MAX(memberID), 0) + 1 AS nextID FROM Member")
-        next_member_id = cursor.fetchone()["nextID"]
+        if existing_member and int(existing_member.get("isDeleted", 0)) == 1:
+            next_member_id = existing_member["memberID"]
+            is_reactivated = True
+            cursor.execute(
+                """
+                UPDATE Member
+                SET name = %s, password = %s, phoneNumber = %s, isDeleted = 0
+                WHERE memberID = %s
+                """,
+                (member_name, hash_password(member_password), member_phone, next_member_id),
+            )
+        else:
+            cursor.execute("SELECT COALESCE(MAX(memberID), 0) + 1 AS nextID FROM Member")
+            next_member_id = cursor.fetchone()["nextID"]
 
-        cursor.execute(
-            """
-            INSERT INTO Member(memberID, name, email, password, phoneNumber, createdAt)
-            VALUES (%s, %s, %s, %s, %s, NOW())
-            """,
-            (
-                next_member_id,
-                member_name,
-                member_email,
-                hash_password(member_password),
-                member_phone,
-            ),
-        )
+            cursor.execute(
+                """
+                INSERT INTO Member(memberID, name, email, password, phoneNumber, createdAt)
+                VALUES (%s, %s, %s, %s, %s, NOW())
+                """,
+                (
+                    next_member_id,
+                    member_name,
+                    member_email,
+                    hash_password(member_password),
+                    member_phone,
+                ),
+            )
 
         role_name = "Customer"
         if signup_as == "DeliveryPartner":
@@ -394,7 +477,7 @@ def signup():
             return json_response(status=500, message=f"Role not found: {role_name}")
 
         cursor.execute(
-            "INSERT INTO MemberRoleMapping(memberID, roleID) VALUES (%s, %s)",
+            "INSERT IGNORE INTO MemberRoleMapping(memberID, roleID) VALUES (%s, %s)",
             (next_member_id, role_row["roleID"]),
         )
 
@@ -407,8 +490,15 @@ def signup():
         if signup_as == "Member":
             cursor.execute(
                 """
-                INSERT INTO Customer(customerID, loyaltyTier, membershipDiscount, cartTotalAmount, membershipDueDate, membership)
-                VALUES (%s, 1, 0, 0, NULL, 0)
+                INSERT INTO Customer(customerID, loyaltyTier, membershipDiscount, cartTotalAmount, membershipDueDate, membership, isDeleted)
+                VALUES (%s, 1, 0, 0, NULL, 0, 0)
+                ON DUPLICATE KEY UPDATE
+                    loyaltyTier = VALUES(loyaltyTier),
+                    membershipDiscount = VALUES(membershipDiscount),
+                    cartTotalAmount = VALUES(cartTotalAmount),
+                    membershipDueDate = VALUES(membershipDueDate),
+                    membership = VALUES(membership),
+                    isDeleted = 0
                 """,
                 (next_member_id,),
             )
@@ -437,9 +527,19 @@ def signup():
                 """
                 INSERT INTO DeliveryPartner(
                     partnerID, vehicleNumber, licenseID, dateOfBirth,
-                    currentLatitude, currentLongitude, isOnline, averageRating, image
+                    currentLatitude, currentLongitude, isOnline, averageRating, image, isDeleted
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, NULL, x'00')
+                VALUES (%s, %s, %s, %s, %s, %s, %s, NULL, x'00', 0)
+                ON DUPLICATE KEY UPDATE
+                    vehicleNumber = VALUES(vehicleNumber),
+                    licenseID = VALUES(licenseID),
+                    dateOfBirth = VALUES(dateOfBirth),
+                    currentLatitude = VALUES(currentLatitude),
+                    currentLongitude = VALUES(currentLongitude),
+                    isOnline = VALUES(isOnline),
+                    averageRating = VALUES(averageRating),
+                    image = VALUES(image),
+                    isDeleted = 0
                 """,
                 (
                     next_member_id,
@@ -502,10 +602,10 @@ def signup():
         write_audit_log(
             connection,
             None,
-            "INSERT",
+            "UPDATE" if is_reactivated else "INSERT",
             "Member",
             next_member_id,
-            {"signupAs": signup_as, "email": member_email, "role": role_name},
+            {"signupAs": signup_as, "email": member_email, "role": role_name, "reactivated": is_reactivated},
         )
         write_activity_log(
             "SIGNUP_SUCCESS",
@@ -513,6 +613,7 @@ def signup():
                 "memberID": next_member_id,
                 "signupAs": signup_as,
                 "email": member_email,
+                "reactivated": is_reactivated,
                 "ip": request.remote_addr,
             },
         )
@@ -537,7 +638,7 @@ def signup():
         connection.commit()
         return json_response(
             status=201,
-            message="Signup successful",
+            message="Account reactivated successfully" if is_reactivated else "Signup successful",
             data={
                 **created_payload,
                 "token": token,
@@ -667,6 +768,10 @@ def customer_orders():
         target_member_id = request.args.get("memberID", default=target_member_id, type=int)
 
     try:
+        expired_count = expire_pending_order_payments(connection, target_member_id)
+        if expired_count > 0:
+            connection.commit()
+
         cursor = connection.cursor(dictionary=True)
         cursor.execute(
             """
@@ -763,10 +868,9 @@ def delete_customer_profile():
     try:
         cursor = connection.cursor()
         cursor.execute("DELETE FROM Sessions WHERE memberID = %s", (member_id,))
-        cursor.execute("DELETE FROM MemberRoleMapping WHERE memberID = %s", (member_id,))
-        cursor.execute("DELETE FROM Customer WHERE customerID = %s", (member_id,))
-        cursor.execute("DELETE FROM DeliveryPartner WHERE partnerID = %s", (member_id,))
-        cursor.execute("DELETE FROM Member WHERE memberID = %s", (member_id,))
+        cursor.execute("UPDATE Customer SET isDeleted = 1 WHERE customerID = %s", (member_id,))
+        cursor.execute("UPDATE DeliveryPartner SET isDeleted = 1 WHERE partnerID = %s", (member_id,))
+        cursor.execute("UPDATE Member SET isDeleted = 1 WHERE memberID = %s", (member_id,))
 
         if cursor.rowcount == 0:
             connection.rollback()
@@ -779,19 +883,13 @@ def delete_customer_profile():
             "DELETE",
             "Member",
             member_id,
-            {"selfDelete": True},
+            {"selfDelete": True, "softDelete": True},
         )
         connection.commit()
         close_request_connection()
         return json_response(message="Profile successfully deleted")
     except Error as exc:
         connection.rollback()
-        if getattr(exc, "errno", None) == 1451:
-            close_request_connection()
-            return json_response(
-                status=409,
-                message="Profile cannot be deleted because related records exist (orders/payments/addresses).",
-            )
         close_request_connection()
         return json_response(status=500, message=f"Database error: {exc}")
 
@@ -1095,6 +1193,823 @@ def delete_item_review():
         return json_response(status=500, message=f"Database error: {exc}")
 
 
+@app.get("/api/customer/addresses")
+@require_roles("Customer")
+def list_customer_addresses():
+    connection = request.db_connection
+    member_id = request.current_user["memberID"]
+
+    try:
+        cursor = connection.cursor(dictionary=True)
+        cursor.execute(
+            """
+            SELECT addressID, addressLine, city, zipCode, label, latitude, longitude, isSaved
+            FROM Address
+            WHERE customerID = %s
+            ORDER BY addressID
+            """,
+            (member_id,),
+        )
+        addresses = cursor.fetchall()
+        close_request_connection()
+        return json_response(addresses)
+    except Error as exc:
+        close_request_connection()
+        return json_response(status=500, message=f"Database error: {exc}")
+
+
+@app.post("/api/customer/addresses")
+@require_roles("Customer")
+def create_customer_address():
+    connection = request.db_connection
+    member_id = request.current_user["memberID"]
+    payload = request.get_json(silent=True) or {}
+
+    address_line = str(payload.get("addressLine", "")).strip()
+    city = str(payload.get("city", "")).strip()
+    zip_code = str(payload.get("zipCode", "")).strip()
+    label = str(payload.get("label", "")).strip() or "Home"
+    latitude = payload.get("latitude", 0)
+    longitude = payload.get("longitude", 0)
+    make_selected = bool(payload.get("selected", False))
+
+    if not address_line or not city or not zip_code:
+        close_request_connection()
+        return json_response(status=400, message="addressLine, city, and zipCode are required")
+
+    try:
+        cursor = connection.cursor(dictionary=True)
+        cursor.execute("SELECT COALESCE(MAX(addressID), 0) + 1 AS nextID FROM Address WHERE customerID = %s", (member_id,))
+        next_address_id = cursor.fetchone()["nextID"]
+
+        if make_selected:
+            cursor.execute("UPDATE Address SET isSaved = 0 WHERE customerID = %s", (member_id,))
+
+        selected_value = 1 if make_selected else 0
+        cursor.execute(
+            """
+            INSERT INTO Address(customerID, addressID, addressLine, city, zipCode, label, latitude, longitude, isSaved)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """,
+            (member_id, next_address_id, address_line, city, zip_code, label, latitude, longitude, selected_value),
+        )
+
+        # Auto-select the first address if none is selected yet.
+        if not make_selected:
+            cursor.execute(
+                """
+                UPDATE Address
+                SET isSaved = 1
+                WHERE customerID = %s AND addressID = %s
+                  AND NOT EXISTS (
+                      SELECT 1 FROM (
+                          SELECT addressID FROM Address WHERE customerID = %s AND isSaved = 1
+                      ) t
+                  )
+                """,
+                (member_id, next_address_id, member_id),
+            )
+
+        write_audit_log(
+            connection,
+            member_id,
+            "INSERT",
+            "Address",
+            f"{member_id}:{next_address_id}",
+            {"selected": make_selected},
+        )
+
+        connection.commit()
+        close_request_connection()
+        return json_response(status=201, message="Address added", data={"addressID": next_address_id})
+    except Error as exc:
+        connection.rollback()
+        close_request_connection()
+        return json_response(status=500, message=f"Database error: {exc}")
+
+
+@app.put("/api/customer/addresses/select")
+@require_roles("Customer")
+def select_customer_address():
+    connection = request.db_connection
+    member_id = request.current_user["memberID"]
+    payload = request.get_json(silent=True) or {}
+    address_id = payload.get("addressID")
+
+    if address_id is None:
+        close_request_connection()
+        return json_response(status=400, message="addressID is required")
+
+    try:
+        cursor = connection.cursor(dictionary=True)
+        cursor.execute("SELECT 1 FROM Address WHERE customerID = %s AND addressID = %s", (member_id, address_id))
+        if not cursor.fetchone():
+            close_request_connection()
+            return json_response(status=404, message="Address not found")
+
+        cursor.execute("UPDATE Address SET isSaved = 0 WHERE customerID = %s", (member_id,))
+        cursor.execute("UPDATE Address SET isSaved = 1 WHERE customerID = %s AND addressID = %s", (member_id, address_id))
+
+        write_audit_log(
+            connection,
+            member_id,
+            "UPDATE",
+            "Address",
+            f"{member_id}:{address_id}",
+            {"selected": True},
+        )
+
+        connection.commit()
+        close_request_connection()
+        return json_response(message="Delivery address selected")
+    except Error as exc:
+        connection.rollback()
+        close_request_connection()
+        return json_response(status=500, message=f"Database error: {exc}")
+
+
+@app.get("/api/customer/cart")
+@require_roles("Customer")
+def get_customer_cart():
+    connection = request.db_connection
+    member_id = request.current_user["memberID"]
+
+    try:
+        expired_count = expire_pending_order_payments(connection, member_id)
+        if expired_count > 0:
+            connection.commit()
+
+        cursor = connection.cursor(dictionary=True)
+        cursor.execute(
+            """
+            SELECT ci.customerID, ci.restaurantID, ci.itemID, ci.quantity,
+                   mi.name AS itemName, mi.appPrice,
+                   r.name AS restaurantName
+            FROM CartItem ci
+            JOIN MenuItem mi ON mi.restaurantID = ci.restaurantID AND mi.itemID = ci.itemID
+            JOIN Restaurant r ON r.restaurantID = ci.restaurantID
+            WHERE ci.customerID = %s
+              AND mi.discontinued = 0
+              AND r.isDeleted = 0
+            ORDER BY ci.restaurantID, ci.itemID
+            """,
+            (member_id,),
+        )
+        rows = cursor.fetchall()
+
+        items = []
+        item_count = 0
+        total_amount = 0.0
+        for row in rows:
+            quantity = int(row["quantity"])
+            price = float(row["appPrice"])
+            line_total = round(quantity * price, 2)
+            item_count += quantity
+            total_amount += line_total
+            items.append(
+                {
+                    "restaurantID": row["restaurantID"],
+                    "itemID": row["itemID"],
+                    "name": row["itemName"],
+                    "restaurantName": row["restaurantName"],
+                    "price": price,
+                    "quantity": quantity,
+                    "lineTotal": line_total,
+                }
+            )
+
+        total_amount = round(total_amount, 2)
+        cursor.execute("UPDATE Customer SET cartTotalAmount = %s WHERE customerID = %s", (total_amount, member_id))
+        connection.commit()
+
+        close_request_connection()
+        return json_response({"items": items, "itemCount": item_count, "totalAmount": total_amount})
+    except Error as exc:
+        connection.rollback()
+        close_request_connection()
+        return json_response(status=500, message=f"Database error: {exc}")
+
+
+@app.put("/api/customer/cart/item")
+@require_roles("Customer")
+def upsert_customer_cart_item():
+    connection = request.db_connection
+    member_id = request.current_user["memberID"]
+    payload = request.get_json(silent=True) or {}
+
+    restaurant_id = payload.get("restaurantID")
+    item_id = payload.get("itemID")
+    quantity_delta = payload.get("quantityDelta", 1)
+
+    if restaurant_id is None or item_id is None:
+        close_request_connection()
+        return json_response(status=400, message="restaurantID and itemID are required")
+
+    try:
+        quantity_delta = int(quantity_delta)
+    except (TypeError, ValueError):
+        close_request_connection()
+        return json_response(status=400, message="quantityDelta must be an integer")
+
+    if quantity_delta == 0:
+        close_request_connection()
+        return json_response(status=400, message="quantityDelta cannot be 0")
+
+    try:
+        cursor = connection.cursor(dictionary=True)
+        cursor.execute(
+            """
+            SELECT mi.restaurantID, mi.itemID
+            FROM MenuItem mi
+            JOIN Restaurant r ON r.restaurantID = mi.restaurantID
+            WHERE mi.restaurantID = %s
+              AND mi.itemID = %s
+              AND mi.discontinued = 0
+              AND mi.isAvailable = 1
+              AND r.isDeleted = 0
+            """,
+            (restaurant_id, item_id),
+        )
+        if not cursor.fetchone():
+            close_request_connection()
+            return json_response(status=404, message="Menu item not found or unavailable")
+
+        cursor.execute(
+            "SELECT quantity FROM CartItem WHERE customerID = %s AND restaurantID = %s AND itemID = %s",
+            (member_id, restaurant_id, item_id),
+        )
+        existing = cursor.fetchone()
+
+        if not existing and quantity_delta > 0:
+            cursor.execute(
+                "SELECT restaurantID FROM CartItem WHERE customerID = %s LIMIT 1",
+                (member_id,),
+            )
+            cart_anchor = cursor.fetchone()
+            if cart_anchor and int(cart_anchor["restaurantID"]) != int(restaurant_id):
+                close_request_connection()
+                return json_response(
+                    status=409,
+                    message="Cart can contain items from only one restaurant at a time. Clear cart first.",
+                )
+
+        if existing:
+            new_quantity = int(existing["quantity"]) + quantity_delta
+            if new_quantity <= 0:
+                cursor.execute(
+                    "DELETE FROM CartItem WHERE customerID = %s AND restaurantID = %s AND itemID = %s",
+                    (member_id, restaurant_id, item_id),
+                )
+                action = "DELETE"
+            else:
+                cursor.execute(
+                    "UPDATE CartItem SET quantity = %s WHERE customerID = %s AND restaurantID = %s AND itemID = %s",
+                    (new_quantity, member_id, restaurant_id, item_id),
+                )
+                action = "UPDATE"
+        else:
+            if quantity_delta < 0:
+                close_request_connection()
+                return json_response(status=400, message="Cannot decrease quantity for an item not in cart")
+            cursor.execute(
+                "INSERT INTO CartItem(customerID, restaurantID, itemID, quantity) VALUES (%s, %s, %s, %s)",
+                (member_id, restaurant_id, item_id, quantity_delta),
+            )
+            action = "INSERT"
+
+        total = update_customer_cart_total(connection, member_id)
+        write_audit_log(
+            connection,
+            member_id,
+            action,
+            "CartItem",
+            f"{member_id}:{restaurant_id}:{item_id}",
+            {"quantityDelta": quantity_delta, "cartTotalAmount": total},
+        )
+
+        connection.commit()
+        close_request_connection()
+        return json_response(message="Cart updated successfully")
+    except Error as exc:
+        connection.rollback()
+        close_request_connection()
+        return json_response(status=500, message=f"Database error: {exc}")
+
+
+@app.delete("/api/customer/cart/item")
+@require_roles("Customer")
+def delete_customer_cart_item():
+    connection = request.db_connection
+    member_id = request.current_user["memberID"]
+    payload = request.get_json(silent=True) or {}
+
+    restaurant_id = payload.get("restaurantID")
+    item_id = payload.get("itemID")
+
+    if restaurant_id is None or item_id is None:
+        close_request_connection()
+        return json_response(status=400, message="restaurantID and itemID are required")
+
+    try:
+        cursor = connection.cursor()
+        cursor.execute(
+            "DELETE FROM CartItem WHERE customerID = %s AND restaurantID = %s AND itemID = %s",
+            (member_id, restaurant_id, item_id),
+        )
+        if cursor.rowcount == 0:
+            connection.rollback()
+            close_request_connection()
+            return json_response(status=404, message="Cart item not found")
+
+        total = update_customer_cart_total(connection, member_id)
+        write_audit_log(
+            connection,
+            member_id,
+            "DELETE",
+            "CartItem",
+            f"{member_id}:{restaurant_id}:{item_id}",
+            {"removed": True, "cartTotalAmount": total},
+        )
+
+        connection.commit()
+        close_request_connection()
+        return json_response(message="Cart item removed")
+    except Error as exc:
+        connection.rollback()
+        close_request_connection()
+        return json_response(status=500, message=f"Database error: {exc}")
+
+
+@app.delete("/api/customer/cart")
+@require_roles("Customer")
+def clear_customer_cart():
+    connection = request.db_connection
+    member_id = request.current_user["memberID"]
+
+    try:
+        cursor = connection.cursor()
+        cursor.execute("DELETE FROM CartItem WHERE customerID = %s", (member_id,))
+        total = update_customer_cart_total(connection, member_id)
+
+        write_audit_log(
+            connection,
+            member_id,
+            "DELETE",
+            "CartItem",
+            str(member_id),
+            {"clearCart": True, "cartTotalAmount": total},
+        )
+
+        connection.commit()
+        close_request_connection()
+        return json_response(message="Cart cleared")
+    except Error as exc:
+        connection.rollback()
+        close_request_connection()
+        return json_response(status=500, message=f"Database error: {exc}")
+
+
+@app.post("/api/customer/cart/payment-demo")
+@require_roles("Customer")
+def customer_payment_demo():
+    connection = request.db_connection
+    member_id = request.current_user["memberID"]
+    payload = request.get_json(silent=True) or {}
+
+    status_in = str(payload.get("status", "")).strip().lower()
+    status_map = {
+        "successful": "Success",
+        "processing": "Pending",
+        "failed": "Failed",
+    }
+    payment_mode_in = str(payload.get("paymentMode", "online")).strip().lower()
+    payment_mode_map = {
+        "online": "OnQuickBites",
+        "cod": "COD",
+        "onquickbites": "OnQuickBites",
+    }
+    if status_in not in status_map:
+        close_request_connection()
+        return json_response(status=400, message="Invalid payment status. Use successful, processing, or failed")
+    if payment_mode_in not in payment_mode_map:
+        close_request_connection()
+        return json_response(status=400, message="Invalid payment mode. Use online or cod")
+
+    try:
+        expired_count = expire_pending_order_payments(connection, member_id)
+        if expired_count > 0:
+            connection.commit()
+
+        cursor = connection.cursor(dictionary=True)
+        cart_total = calculate_customer_cart_total(connection, member_id)
+        if cart_total <= 0:
+            close_request_connection()
+            return json_response(status=400, message="Cart is empty")
+
+        cursor.execute(
+            """
+            SELECT ci.restaurantID, ci.itemID, ci.quantity, mi.appPrice
+            FROM CartItem ci
+            JOIN MenuItem mi ON mi.restaurantID = ci.restaurantID AND mi.itemID = ci.itemID
+            WHERE ci.customerID = %s
+            ORDER BY ci.restaurantID, ci.itemID
+            """,
+            (member_id,),
+        )
+        cart_rows = cursor.fetchall()
+        restaurant_ids = sorted({int(row["restaurantID"]) for row in cart_rows})
+
+        if len(restaurant_ids) > 1:
+            close_request_connection()
+            return json_response(
+                status=409,
+                message="Cart must contain items from a single restaurant only",
+            )
+
+        cursor.execute("SELECT COALESCE(MAX(paymentID), 0) + 1 AS nextID FROM Payment")
+        payment_id = cursor.fetchone()["nextID"]
+
+        db_status = status_map[status_in]
+        db_payment_mode = payment_mode_map[payment_mode_in]
+        cursor.execute(
+            """
+            INSERT INTO Payment(paymentID, customerID, amount, paymentType, status, transactionTime, paymentFor)
+            VALUES (%s, %s, %s, %s, %s, NOW(), 'Order')
+            """,
+            (payment_id, member_id, cart_total, db_payment_mode, db_status),
+        )
+
+        if status_in == "successful":
+            selected_address_id = get_selected_address_id(connection, member_id)
+            if selected_address_id is None:
+                connection.rollback()
+                close_request_connection()
+                return json_response(
+                    status=400,
+                    message="Please add/select a delivery address before placing the order",
+                    data={"redirectTo": "/customer/profile", "code": "ADDRESS_REQUIRED"},
+                )
+
+            if not restaurant_ids:
+                connection.rollback()
+                close_request_connection()
+                return json_response(status=400, message="Cart is empty")
+
+            cursor.execute("SELECT COALESCE(MAX(orderID), 0) + 1 AS nextID FROM Orders")
+            next_order_id = cursor.fetchone()["nextID"]
+
+            now = datetime.utcnow()
+            estimated_time = now + timedelta(minutes=45)
+            target_restaurant_id = restaurant_ids[0]
+
+            cursor.execute(
+                """
+                INSERT INTO Orders(
+                    orderID, orderTime, estimatedTime, totalAmount, orderStatus,
+                    customerID, restaurantID, addressID, paymentID, specialInstruction
+                )
+                VALUES (%s, %s, %s, %s, 'Created', %s, %s, %s, %s, %s)
+                """,
+                (
+                    next_order_id,
+                    now,
+                    estimated_time,
+                    cart_total,
+                    member_id,
+                    target_restaurant_id,
+                    selected_address_id,
+                    payment_id,
+                    str(payload.get("specialInstruction", "")).strip() or None,
+                ),
+            )
+
+            for row in cart_rows:
+                cursor.execute(
+                    """
+                    INSERT INTO OrderItem(orderID, restaurantID, itemID, quantity, priceAtPurchase)
+                    VALUES (%s, %s, %s, %s, %s)
+                    """,
+                    (
+                        next_order_id,
+                        row["restaurantID"],
+                        row["itemID"],
+                        row["quantity"],
+                        row["appPrice"],
+                    ),
+                )
+
+            cursor.execute("DELETE FROM CartItem WHERE customerID = %s", (member_id,))
+            update_customer_cart_total(connection, member_id)
+
+            cursor.execute(
+                """
+                SELECT COUNT(*) AS successful_orders
+                FROM Orders o
+                WHERE o.customerID = %s
+                  AND EXISTS (
+                    SELECT 1 FROM Payment p
+                    WHERE p.paymentID = o.paymentID
+                      AND p.status = 'Success'
+                      AND p.paymentFor = 'Order'
+                  )
+                """,
+                (member_id,),
+            )
+            successful_count = cursor.fetchone()["successful_orders"]
+            
+            if successful_count % 10 == 0 and successful_count > 0:
+                cursor.execute(
+                    """
+                    UPDATE Customer
+                    SET loyaltyTier = LEAST(5, loyaltyTier + 1)
+                    WHERE customerID = %s AND membership = 1
+                    """,
+                    (member_id,),
+                )
+                write_audit_log(
+                    connection,
+                    member_id,
+                    "UPDATE",
+                    "Customer",
+                    member_id,
+                    {"reason": "loyalty_tier_increment", "successful_orders": successful_count},
+                )
+
+            write_audit_log(
+                connection,
+                member_id,
+                "INSERT",
+                "Orders",
+                next_order_id,
+                {
+                    "restaurantID": target_restaurant_id,
+                    "addressID": selected_address_id,
+                    "paymentID": payment_id,
+                    "status": "Created",
+                },
+            )
+
+        write_audit_log(
+            connection,
+            member_id,
+            "INSERT",
+            "Payment",
+            payment_id,
+            {"status": db_status, "amount": cart_total, "paymentMode": db_payment_mode, "demo": True},
+        )
+
+        connection.commit()
+        close_request_connection()
+        return json_response(
+            {
+                "paymentID": payment_id,
+                "status": db_status,
+                "paymentType": db_payment_mode,
+                "amount": round(cart_total, 2),
+                "orderPlaced": status_in == "successful",
+                "notifyRestaurant": status_in == "successful",
+            },
+            message=(
+                "Order placed successfully. Restaurant has been notified."
+                if status_in == "successful"
+                else f"Demo payment marked as {status_in}"
+            ),
+        )
+    except Error as exc:
+        connection.rollback()
+        close_request_connection()
+        return json_response(status=500, message=f"Database error: {exc}")
+
+
+@app.post("/api/customer/cart/payment-demo/recheck")
+@require_roles("Customer")
+def recheck_processing_payment():
+    connection = request.db_connection
+    member_id = request.current_user["memberID"]
+    payload = request.get_json(silent=True) or {}
+    payment_id = payload.get("paymentID")
+
+    if payment_id is None:
+        close_request_connection()
+        return json_response(status=400, message="paymentID is required")
+
+    try:
+        cursor = connection.cursor(dictionary=True)
+        cursor.execute(
+            """
+            SELECT paymentID, status, transactionTime
+            FROM Payment
+            WHERE paymentID = %s AND customerID = %s AND paymentFor = 'Order'
+            """,
+            (payment_id, member_id),
+        )
+        payment_row = cursor.fetchone()
+        if not payment_row:
+            close_request_connection()
+            return json_response(status=404, message="Payment not found")
+
+        if payment_row["status"] != "Pending":
+            close_request_connection()
+            return json_response(
+                {"paymentID": payment_id, "status": payment_row["status"]},
+                message="Payment is no longer processing",
+            )
+
+        cursor.execute(
+            """
+            SELECT TIMESTAMPDIFF(SECOND, transactionTime, NOW()) AS elapsedSeconds
+            FROM Payment
+            WHERE paymentID = %s AND customerID = %s
+            """,
+            (payment_id, member_id),
+        )
+        elapsed = int(cursor.fetchone()["elapsedSeconds"] or 0)
+        if elapsed >= 120:
+            cursor.execute(
+                "UPDATE Payment SET status = 'Failed' WHERE paymentID = %s AND customerID = %s",
+                (payment_id, member_id),
+            )
+            write_audit_log(
+                connection,
+                member_id,
+                "UPDATE",
+                "Payment",
+                payment_id,
+                {"status": "Failed", "reason": "processing_timeout"},
+            )
+            connection.commit()
+            close_request_connection()
+            return json_response(
+                {"paymentID": payment_id, "status": "Failed"},
+                message="Processing timeout reached. Payment marked as failed.",
+            )
+
+        remaining = max(0, 120 - elapsed)
+        close_request_connection()
+        return json_response(
+            {"paymentID": payment_id, "status": "Pending", "secondsRemaining": remaining},
+            message="Payment is still processing",
+        )
+    except Error as exc:
+        connection.rollback()
+        close_request_connection()
+        return json_response(status=500, message=f"Database error: {exc}")
+
+
+@app.get("/api/customer/payments/last")
+@require_roles("Customer")
+def get_last_customer_payment_status():
+    connection = request.db_connection
+    member_id = request.current_user["memberID"]
+
+    try:
+        expired_count = expire_pending_order_payments(connection, member_id)
+        if expired_count > 0:
+            connection.commit()
+
+        cursor = connection.cursor(dictionary=True)
+        cursor.execute(
+            """
+            SELECT paymentID, amount, paymentType, status, transactionTime
+            FROM Payment
+            WHERE customerID = %s AND paymentFor = 'Order'
+            ORDER BY transactionTime DESC, paymentID DESC
+            LIMIT 1
+            """,
+            (member_id,),
+        )
+        payment_row = cursor.fetchone()
+        close_request_connection()
+
+        if not payment_row:
+            return json_response(
+                {
+                    "hasPayment": False,
+                },
+                message="No order payments found yet",
+            )
+
+        return json_response(
+            {
+                "hasPayment": True,
+                "paymentID": payment_row["paymentID"],
+                "amount": float(payment_row["amount"]),
+                "paymentType": payment_row["paymentType"],
+                "status": payment_row["status"],
+                "transactionTime": (
+                    payment_row["transactionTime"].isoformat()
+                    if hasattr(payment_row["transactionTime"], "isoformat")
+                    else str(payment_row["transactionTime"])
+                ),
+            }
+        )
+    except Error as exc:
+        connection.rollback()
+        close_request_connection()
+        return json_response(status=500, message=f"Database error: {exc}")
+
+
+@app.post("/api/customer/membership/purchase")
+@require_roles("Customer")
+def purchase_membership():
+    connection = request.db_connection
+    member_id = request.current_user["memberID"]
+    payload = request.get_json(silent=True) or {}
+
+    payment_mode_in = str(payload.get("paymentMode", "online")).strip().lower()
+    
+    if payment_mode_in != "online":
+        close_request_connection()
+        return json_response(status=400, message="Membership purchase only available via Online (QuickBites) payment")
+
+    try:
+        cursor = connection.cursor(dictionary=True)
+        cursor.execute(
+            """
+            SELECT membership, membershipDueDate
+            FROM Customer
+            WHERE customerID = %s
+            """,
+            (member_id,),
+        )
+        customer_row = cursor.fetchone()
+        if not customer_row:
+            close_request_connection()
+            return json_response(status=404, message="Customer not found")
+
+        if customer_row["membership"] == 1:
+            close_request_connection()
+            return json_response(
+                status=409,
+                message="You are already a member",
+                data={"membershipDueDate": (
+                    customer_row["membershipDueDate"].isoformat()
+                    if hasattr(customer_row["membershipDueDate"], "isoformat")
+                    else str(customer_row["membershipDueDate"])
+                )}
+            )
+
+        cursor.execute("SELECT COALESCE(MAX(paymentID), 0) + 1 AS nextID FROM Payment")
+        payment_id = cursor.fetchone()["nextID"]
+
+        membership_amount = 500
+        db_payment_mode = "OnQuickBites"
+
+        cursor.execute(
+            """
+            INSERT INTO Payment(paymentID, customerID, amount, paymentType, status, transactionTime, paymentFor)
+            VALUES (%s, %s, %s, %s, 'Success', NOW(), 'Membership')
+            """,
+            (payment_id, member_id, membership_amount, db_payment_mode),
+        )
+
+        membership_due = datetime.utcnow() + timedelta(days=365)
+        
+        cursor.execute(
+            """
+            UPDATE Customer
+            SET membership = 1, membershipDueDate = %s, loyaltyTier = 2
+            WHERE customerID = %s
+            """,
+            (membership_due, member_id),
+        )
+
+        write_audit_log(
+            connection,
+            member_id,
+            "INSERT",
+            "Payment",
+            payment_id,
+            {"amount": membership_amount, "paymentMode": db_payment_mode, "paymentFor": "Membership"},
+        )
+        
+        write_audit_log(
+            connection,
+            member_id,
+            "UPDATE",
+            "Customer",
+            member_id,
+            {"membership": 1, "membershipDueDate": membership_due.isoformat(), "loyaltyTier": 2},
+        )
+
+        connection.commit()
+        close_request_connection()
+        return json_response(
+            {
+                "paymentID": payment_id,
+                "status": "Success",
+                "amount": membership_amount,
+                "membershipDueDate": membership_due.isoformat(),
+                "loyaltyTier": 2,
+            },
+            message="Membership purchased successfully! You now have access to loyalty tier benefits.",
+        )
+    except Error as exc:
+        connection.rollback()
+        close_request_connection()
+        return json_response(status=500, message=f"Database error: {exc}")
+
+
 @app.get("/api/delivery/assignments")
 @require_roles("DeliveryPartner", "Admin")
 def delivery_assignments():
@@ -1138,7 +2053,7 @@ def list_restaurants():
             """
             SELECT restaurantID, name, city, isOpen, isVerified, averageRating
             FROM Restaurant
-            WHERE discontinued = 0
+            WHERE discontinued = 0 AND isDeleted = 0
             ORDER BY name
             """
         )
@@ -1157,7 +2072,7 @@ def list_menu_items():
     restaurant_id = request.args.get("restaurantID", type=int)
     search = request.args.get("search", "").strip()
 
-    clauses = ["mi.discontinued = 0"]
+    clauses = ["mi.discontinued = 0", "r.isDeleted = 0"]
     params = []
 
     if restaurant_id is not None:
@@ -1455,10 +2370,9 @@ def delete_member(member_id):
     try:
         cursor = connection.cursor()
         cursor.execute("DELETE FROM Sessions WHERE memberID = %s", (member_id,))
-        cursor.execute("DELETE FROM MemberRoleMapping WHERE memberID = %s", (member_id,))
-        cursor.execute("DELETE FROM Customer WHERE customerID = %s", (member_id,))
-        cursor.execute("DELETE FROM DeliveryPartner WHERE partnerID = %s", (member_id,))
-        cursor.execute("DELETE FROM Member WHERE memberID = %s", (member_id,))
+        cursor.execute("UPDATE Customer SET isDeleted = 1 WHERE customerID = %s", (member_id,))
+        cursor.execute("UPDATE DeliveryPartner SET isDeleted = 1 WHERE partnerID = %s", (member_id,))
+        cursor.execute("UPDATE Member SET isDeleted = 1 WHERE memberID = %s", (member_id,))
 
         if cursor.rowcount == 0:
             connection.rollback()
@@ -1470,15 +2384,54 @@ def delete_member(member_id):
             "DELETE",
             "Member",
             member_id,
-            {"cascadeCleanup": True},
+            {"softDelete": True},
         )
         connection.commit()
-        return json_response(message="Member deleted")
+        return json_response(message="Member deleted (soft delete)")
     except Error as exc:
         connection.rollback()
         return json_response(status=500, message=f"Database error: {exc}")
     finally:
         close_request_connection()
+
+
+@app.post("/api/admin/members/<int:member_id>/restore")
+@require_roles("Admin")
+def restore_member(member_id):
+    connection = request.db_connection
+
+    try:
+        cursor = connection.cursor(dictionary=True)
+        cursor.execute("SELECT memberID, isDeleted FROM Member WHERE memberID = %s", (member_id,))
+        member_row = cursor.fetchone()
+        if not member_row:
+            close_request_connection()
+            return json_response(status=404, message="Member not found")
+
+        if int(member_row.get("isDeleted", 0)) == 0:
+            close_request_connection()
+            return json_response(message="Member is already active")
+
+        cursor.execute("UPDATE Member SET isDeleted = 0 WHERE memberID = %s", (member_id,))
+        cursor.execute("UPDATE Customer SET isDeleted = 0 WHERE customerID = %s", (member_id,))
+        cursor.execute("UPDATE DeliveryPartner SET isDeleted = 0 WHERE partnerID = %s", (member_id,))
+
+        write_audit_log(
+            connection,
+            request.current_user["memberID"],
+            "UPDATE",
+            "Member",
+            member_id,
+            {"restored": True, "softDelete": False},
+        )
+
+        connection.commit()
+        close_request_connection()
+        return json_response(message="Member restored successfully")
+    except Error as exc:
+        connection.rollback()
+        close_request_connection()
+        return json_response(status=500, message=f"Database error: {exc}")
 
 
 if __name__ == "__main__":

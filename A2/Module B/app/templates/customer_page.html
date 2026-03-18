@@ -6,6 +6,7 @@
     <title>QuickBites | {{ page_title }}</title>
     <link rel="stylesheet" href="/static/css/styles.css" />
     <link rel="stylesheet" href="/static/css/customer.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
 </head>
 <body class="customer-body" data-page="{{ page_name }}">
     <header class="customer-nav-shell">
@@ -55,7 +56,7 @@
                     {% elif page_name == 'browse' %}
                     Filter the live menu catalog by dish name or restaurant and add picks to your cart.
                     {% else %}
-                    Your cart is stored locally for now so you can prototype the ordering journey end to end.
+                    Your cart is saved per customer in the database so each account has a separate cart.
                     {% endif %}
                 </p>
                 {% if page_name == 'home' %}
@@ -171,7 +172,59 @@
                 </article>
             </div>
 
+            <div class="profile-history-grid">
+                <article class="profile-card">
+                    <h3>Delivery Addresses</h3>
+                    <p>Select one delivery address for checkout.</p>
+                    <div id="profile-addresses-list"></div>
+                </article>
+                <article class="profile-card">
+                    <h3>Add Address</h3>
+                    <form id="address-create-form" class="grid-form">
+                        <input type="text" id="address-line" placeholder="Address line" required />
+                        <input type="text" id="address-city" placeholder="City" required />
+                        <input type="text" id="address-zip" placeholder="Zip code" required />
+                        <input type="text" id="address-label" placeholder="Label (Home/Work)" />
+                        <div class="address-map-container">
+                            <div id="address-map" style="width: 100%; height: 400px; border: 1px solid #e0e0e0; border-radius: 4px; background-color: #f5f5f5;">
+                                <div style="display: flex; align-items: center; justify-content: center; height: 100%; color: #999; flex-direction: column;">
+                                    <p>Map loading... or click "Use Geolocation" below</p>
+                                </div>
+                            </div>
+                            <div class="map-controls">
+                                <button type="button" id="use-geolocation-btn" class="btn-secondary">Use My Location</button>
+                                <button type="button" id="clear-map-btn" class="btn-secondary">Clear Map</button>
+                            </div>
+                        </div>
+                        <div class="coordinate-inputs">
+                            <label>Latitude: <input type="number" id="address-latitude" placeholder="0.0000" step="0.0001" /></label>
+                            <label>Longitude: <input type="number" id="address-longitude" placeholder="0.0000" step="0.0001" /></label>
+                            <small>Click on the map or enter coordinates manually</small>
+                        </div>
+                        <div class="profile-edit-actions">
+                            <button type="submit">Add Address</button>
+                        </div>
+                    </form>
+                </article>
+            </div>
+
             <div class="profile-actions">
+                <article class="profile-card">
+                    <h3>Membership Status</h3>
+                    <div id="membership-section" class="membership-info">
+                        <p id="membership-status-text">Not a member yet</p>
+                        <button id="purchase-membership-btn" type="button" class="btn-primary">Purchase Membership (Rs 500/Year)</button>
+                        <div id="membership-form" class="hidden">
+                            <p>Membership payment via Online (QuickBites)</p>
+                            <input type="hidden" name="membership-payment-mode" value="online" />
+                            <div class="membership-actions">
+                                <button type="button" id="confirm-membership-btn" class="btn-primary">Confirm Purchase</button>
+                                <button type="button" id="cancel-membership-btn" class="btn-secondary">Cancel</button>
+                            </div>
+                        </div>
+                    </div>
+                </article>
+
                 <article class="profile-card">
                     <h3>Update Profile</h3>
                     <button id="profile-edit-toggle-btn" type="button">Update Profile</button>
@@ -212,7 +265,19 @@
                     <h3 id="cart-item-count">0</h3>
                     <p>Estimated total</p>
                     <h2 id="cart-total">Rs 0.00</h2>
-                    <button type="button" disabled>Checkout Coming Soon</button>
+                    <p>Payment Mode</p>
+                    <div id="payment-mode-options" class="payment-modes">
+                        <label><input type="radio" name="payment-mode" value="online" checked /> Online (QuickBites)</label>
+                        <label><input type="radio" name="payment-mode" value="cod" /> Cash on Delivery (COD)</label>
+                    </div>
+                    <div id="payment-demo-actions" class="row-inline">
+                        <button type="button" data-payment-status="successful">Mark Successful</button>
+                        <button type="button" class="btn-secondary" data-payment-status="processing">Mark Processing</button>
+                        <button type="button" class="btn-danger" data-payment-status="failed">Mark Failed</button>
+                    </div>
+                    <hr />
+                    <h4>Last Payment Status</h4>
+                    <div id="last-payment-status" class="empty-state">No order payments found yet.</div>
                 </aside>
             </div>
         </section>
@@ -235,6 +300,7 @@
     </footer>
 
     <div id="toast" class="toast hidden"></div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
     <script src="/static/js/customer.js"></script>
 </body>
 </html>

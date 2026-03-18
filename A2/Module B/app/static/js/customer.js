@@ -6,7 +6,8 @@ const state = {
     menuItems: [],
     profileOrders: [],
     profileReviews: { orderReviews: [], itemReviews: [] },
-    cart: JSON.parse(localStorage.getItem("qb_cart") || "[]"),
+    addresses: [],
+    cart: [],
 };
 
 const pageName = document.body.dataset.page;
@@ -32,6 +33,12 @@ const selectors = {
     profileCustomerDetails: document.getElementById("profile-customer-details"),
     profileOrdersList: document.getElementById("profile-orders-list"),
     profileReviewsList: document.getElementById("profile-reviews-list"),
+    profileAddressesList: document.getElementById("profile-addresses-list"),
+    addressCreateForm: document.getElementById("address-create-form"),
+    addressLine: document.getElementById("address-line"),
+    addressCity: document.getElementById("address-city"),
+    addressZip: document.getElementById("address-zip"),
+    addressLabel: document.getElementById("address-label"),
     profileEditToggleBtn: document.getElementById("profile-edit-toggle-btn"),
     profileEditCancelBtn: document.getElementById("profile-edit-cancel-btn"),
     profileUpdateForm: document.getElementById("profile-update-form"),
@@ -44,8 +51,66 @@ const selectors = {
     cartItemCount: document.getElementById("cart-item-count"),
     cartTotal: document.getElementById("cart-total"),
     clearCartBtn: document.getElementById("clear-cart-btn"),
+    paymentDemoActions: document.getElementById("payment-demo-actions"),
+    paymentModeOptions: document.getElementById("payment-mode-options"),
+    lastPaymentStatus: document.getElementById("last-payment-status"),
     searchChips: document.querySelectorAll("[data-search-chip]"),
 };
+
+function renderLastPaymentStatus(data) {
+    if (!selectors.lastPaymentStatus) {
+        return;
+    }
+    if (!data || !data.hasPayment) {
+        selectors.lastPaymentStatus.innerHTML = "No order payments found yet.";
+        return;
+    }
+
+    const at = data.transactionTime ? new Date(data.transactionTime).toLocaleString() : "-";
+    selectors.lastPaymentStatus.innerHTML = `
+        <p><strong>Payment ID:</strong> ${data.paymentID}</p>
+        <p><strong>Status:</strong> ${data.status}</p>
+        <p><strong>Mode:</strong> ${data.paymentType}</p>
+        <p><strong>Amount:</strong> Rs ${Number(data.amount || 0).toFixed(2)}</p>
+        <p><strong>Time:</strong> ${at}</p>
+    `;
+}
+
+async function refreshLastPaymentStatus() {
+    if (!selectors.lastPaymentStatus) {
+        return;
+    }
+    try {
+        const payload = await api("/api/customer/payments/last");
+        renderLastPaymentStatus(payload.data || { hasPayment: false });
+    } catch (error) {
+        selectors.lastPaymentStatus.innerHTML = "Unable to fetch payment status.";
+    }
+}
+
+function getSelectedPaymentMode() {
+    const checked = document.querySelector("input[name='payment-mode']:checked");
+    return checked ? checked.value : "online";
+}
+
+function scheduleProcessingRecheck(paymentID) {
+    if (!paymentID) {
+        return;
+    }
+
+    setTimeout(async () => {
+        try {
+            const payload = await api("/api/customer/cart/payment-demo/recheck", {
+                method: "POST",
+                body: JSON.stringify({ paymentID }),
+            });
+            showToast(payload.message || "Processing payment rechecked");
+            await refreshLastPaymentStatus();
+        } catch (error) {
+            showToast(error.message || "Could not recheck processing payment", true);
+        }
+    }, 120000);
+}
 
 function showToast(message, isError = false) {
     if (!selectors.toast) {
@@ -55,10 +120,6 @@ function showToast(message, isError = false) {
     selectors.toast.style.background = isError ? "#7f1d1d" : "#0f172a";
     selectors.toast.classList.remove("hidden");
     setTimeout(() => selectors.toast.classList.add("hidden"), 2600);
-}
-
-function persistCart() {
-    localStorage.setItem("qb_cart", JSON.stringify(state.cart));
 }
 
 function updateCartBadge() {
@@ -85,7 +146,10 @@ async function api(path, options = {}) {
     const response = await fetch(path, { ...options, headers });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
-        throw new Error(payload.message || "Request failed");
+        const error = new Error(payload.message || "Request failed");
+        error.status = response.status;
+        error.payload = payload;
+        throw error;
     }
     return payload;
 }
@@ -123,23 +187,38 @@ function renderRestaurantCards(target, restaurants) {
     `).join("");
 }
 
-function addToCart(item) {
-    const existing = state.cart.find((entry) => entry.restaurantID === item.restaurantID && entry.itemID === item.itemID);
-    if (existing) {
-        existing.quantity += 1;
-    } else {
-        state.cart.push({
+async function refreshCart() {
+    const payload = await api("/api/customer/cart");
+    state.cart = payload.data?.items || [];
+    renderCart();
+}
+
+function getCartItemQuantity(restaurantID, itemID) {
+    const item = state.cart.find((ci) => ci.restaurantID === restaurantID && ci.itemID === itemID);
+    return item ? item.quantity : 0;
+}
+
+async function addToCart(item) {
+    await api("/api/customer/cart/item", {
+        method: "PUT",
+        body: JSON.stringify({
             restaurantID: item.restaurantID,
             itemID: item.itemID,
-            name: item.name,
-            restaurantName: item.restaurantName,
-            price: Number(item.appPrice),
-            quantity: 1,
-        });
-    }
-    persistCart();
-    updateCartBadge();
+            quantityDelta: 1,
+        }),
+    });
+    await refreshCart();
+    refreshMenuDisplays();
     showToast(`${item.name} added to cart`);
+}
+
+function refreshMenuDisplays() {
+    if (pageName === "home" && selectors.featuredMenuItems) {
+        renderMenuCards(selectors.featuredMenuItems, state.menuItems.slice(0, 6));
+    }
+    if (pageName === "browse" && selectors.browseResults) {
+        renderMenuCards(selectors.browseResults, state.menuItems);
+    }
 }
 
 function renderMenuCards(target, items) {
@@ -151,7 +230,19 @@ function renderMenuCards(target, items) {
         return;
     }
 
-    target.innerHTML = items.map((item) => `
+    target.innerHTML = items.map((item) => {
+        const quantity = getCartItemQuantity(item.restaurantID, item.itemID);
+        const cartButtonHTML = quantity > 0
+            ? `
+            <div class="quantity-controls">
+                <button type="button" class="qty-btn" data-qty-action="decrease" data-cart-id="${item.restaurantID}:${item.itemID}">−</button>
+                <span class="qty-display">${quantity}</span>
+                <button type="button" class="qty-btn" data-qty-action="increase" data-cart-id="${item.restaurantID}:${item.itemID}">+</button>
+            </div>
+            `
+            : `<button type="button" data-add-item="${item.restaurantID}:${item.itemID}">Add to cart</button>`;
+
+        return `
         <article class="menu-card">
             <p class="section-kicker">${item.restaurantName}</p>
             <h3>${item.name}</h3>
@@ -162,10 +253,11 @@ function renderMenuCards(target, items) {
             </div>
             <div class="price-row">
                 <strong>Rs ${Number(item.appPrice).toFixed(2)}</strong>
-                <button type="button" data-add-item="${item.restaurantID}:${item.itemID}">Add to cart</button>
+                ${cartButtonHTML}
             </div>
         </article>
-    `).join("");
+    `;
+    }).join("");
 }
 
 function renderDefinitionList(target, dataMap) {
@@ -184,6 +276,37 @@ function renderDefinitionList(target, dataMap) {
             <dd>${value ?? "-"}</dd>
         </div>
     `).join("");
+}
+
+function renderAddresses() {
+    const target = selectors.profileAddressesList;
+    if (!target) {
+        return;
+    }
+    if (!state.addresses.length) {
+        renderEmptyState(target, "No delivery address set yet. Add one below.");
+        return;
+    }
+
+    target.innerHTML = state.addresses.map((address) => `
+        <article class="cart-item">
+            <p class="section-kicker">${address.label || "Address"}</p>
+            <h3>${address.addressLine}</h3>
+            <div class="price-row">
+                <span>${address.city}, ${address.zipCode}</span>
+                <strong>${address.isSaved ? "Selected" : "Not Selected"}</strong>
+            </div>
+            <div class="row-inline">
+                <button type="button" data-address-select="${address.addressID}" ${address.isSaved ? "disabled" : ""}>Select for Delivery</button>
+            </div>
+        </article>
+    `).join("");
+}
+
+async function loadAddresses() {
+    const payload = await api("/api/customer/addresses");
+    state.addresses = payload.data || [];
+    renderAddresses();
 }
 
 function renderProfileOrders() {
@@ -331,7 +454,7 @@ function renderCart() {
             <h3>${item.name}</h3>
             <div class="price-row">
                 <span>Qty ${item.quantity}</span>
-                <strong>Rs ${(item.price * item.quantity).toFixed(2)}</strong>
+                <strong>Rs ${(Number(item.price) * item.quantity).toFixed(2)}</strong>
             </div>
             <div class="row-inline">
                 <button type="button" class="btn-secondary" data-cart-action="decrease" data-cart-id="${item.restaurantID}:${item.itemID}">-</button>
@@ -431,6 +554,9 @@ async function loadProfile() {
         selectors.profileUpdatePassword.value = "";
     }
 
+    renderMembershipStatus(customerProfile);
+
+    await loadAddresses();
     await loadProfileOrdersAndReviews();
 }
 
@@ -587,7 +713,6 @@ async function handleProfileDelete() {
         showToast(response.message || "Profile successfully deleted");
         localStorage.removeItem("qb_token");
         localStorage.removeItem("qb_portal");
-        localStorage.removeItem("qb_cart");
         setTimeout(() => {
             window.location.href = "/";
         }, 800);
@@ -662,41 +787,156 @@ async function handleLogout() {
 
 function handleMenuGridClick(event) {
     const addButton = event.target.closest("[data-add-item]");
-    if (!addButton) {
+    if (addButton) {
+        const [restaurantID, itemID] = addButton.dataset.addItem.split(":").map(Number);
+        const item = state.menuItems.find((entry) => entry.restaurantID === restaurantID && entry.itemID === itemID)
+            || state.menuItems.find((entry) => String(entry.restaurantID) === String(restaurantID) && String(entry.itemID) === String(itemID));
+        if (!item) {
+            showToast("Item not found", true);
+            return;
+        }
+        addToCart(item).catch((error) => {
+            showToast(error.message, true);
+        });
         return;
     }
-    const [restaurantID, itemID] = addButton.dataset.addItem.split(":").map(Number);
-    const item = state.menuItems.find((entry) => entry.restaurantID === restaurantID && entry.itemID === itemID)
-        || state.menuItems.find((entry) => String(entry.restaurantID) === String(restaurantID) && String(entry.itemID) === String(itemID));
-    if (!item) {
-        showToast("Item not found", true);
-        return;
+
+    const qtyButton = event.target.closest("[data-qty-action]");
+    if (qtyButton) {
+        const [restaurantID, itemID] = qtyButton.dataset.cartId.split(":").map(Number);
+        const action = qtyButton.dataset.qtyAction;
+        const quantityDelta = action === "increase" ? 1 : -1;
+        api("/api/customer/cart/item", {
+            method: "PUT",
+            body: JSON.stringify({ restaurantID, itemID, quantityDelta }),
+        })
+            .then(() => {
+                refreshCart().then(() => refreshMenuDisplays());
+            })
+            .catch((error) => {
+                showToast(error.message, true);
+            });
     }
-    addToCart(item);
 }
 
-function handleCartClick(event) {
+async function handleCartClick(event) {
     const button = event.target.closest("[data-cart-action]");
     if (!button) {
         return;
     }
     const [restaurantID, itemID] = button.dataset.cartId.split(":").map(Number);
-    const item = state.cart.find((entry) => entry.restaurantID === restaurantID && entry.itemID === itemID);
-    if (!item) {
+    const action = button.dataset.cartAction;
+
+    try {
+        if (action === "increase") {
+            await api("/api/customer/cart/item", {
+                method: "PUT",
+                body: JSON.stringify({ restaurantID, itemID, quantityDelta: 1 }),
+            });
+        } else if (action === "decrease") {
+            await api("/api/customer/cart/item", {
+                method: "PUT",
+                body: JSON.stringify({ restaurantID, itemID, quantityDelta: -1 }),
+            });
+        } else if (action === "remove") {
+            await api("/api/customer/cart/item", {
+                method: "DELETE",
+                body: JSON.stringify({ restaurantID, itemID }),
+            });
+        }
+        await refreshCart();
+        refreshMenuDisplays();
+    } catch (error) {
+        showToast(error.message, true);
+    }
+}
+
+async function handlePaymentDemoClick(event) {
+    const button = event.target.closest("[data-payment-status]");
+    if (!button) {
         return;
     }
-    if (button.dataset.cartAction === "increase") {
-        item.quantity += 1;
-    } else if (button.dataset.cartAction === "decrease") {
-        item.quantity -= 1;
-        if (item.quantity <= 0) {
-            state.cart = state.cart.filter((entry) => !(entry.restaurantID === restaurantID && entry.itemID === itemID));
+
+    const status = button.dataset.paymentStatus;
+    const paymentMode = getSelectedPaymentMode();
+    try {
+        const response = await api("/api/customer/cart/payment-demo", {
+            method: "POST",
+            body: JSON.stringify({ status, paymentMode }),
+        });
+        showToast(response.message || `Demo payment marked as ${status}`);
+        if (response.data?.notifyRestaurant) {
+            window.alert("Restaurant has been notified");
         }
-    } else if (button.dataset.cartAction === "remove") {
-        state.cart = state.cart.filter((entry) => !(entry.restaurantID === restaurantID && entry.itemID === itemID));
+        if (status === "processing" && response.data?.paymentID) {
+            scheduleProcessingRecheck(response.data.paymentID);
+        }
+        await refreshCart();
+        await refreshLastPaymentStatus();
+    } catch (error) {
+        const redirectTo = error.payload?.data?.redirectTo;
+        if (redirectTo) {
+            showToast(error.message || "Please set delivery address first", true);
+            setTimeout(() => {
+                window.location.href = redirectTo;
+            }, 400);
+            return;
+        }
+        showToast(error.message, true);
     }
-    persistCart();
-    renderCart();
+}
+
+async function handleAddressFormSubmit(event) {
+    event.preventDefault();
+    const latInput = document.getElementById("address-latitude");
+    const lngInput = document.getElementById("address-longitude");
+    
+    const payload = {
+        addressLine: selectors.addressLine?.value.trim() || "",
+        city: selectors.addressCity?.value.trim() || "",
+        zipCode: selectors.addressZip?.value.trim() || "",
+        label: selectors.addressLabel?.value.trim() || "Home",
+        latitude: parseFloat(latInput?.value || "0") || 0,
+        longitude: parseFloat(lngInput?.value || "0") || 0,
+        selected: true,
+    };
+
+    try {
+        const response = await api("/api/customer/addresses", {
+            method: "POST",
+            body: JSON.stringify(payload),
+        });
+        showToast(response.message || "Address added");
+        selectors.addressCreateForm?.reset();
+        if (latInput) latInput.value = "";
+        if (lngInput) lngInput.value = "";
+        if (mapMarker && addressMap) {
+            addressMap.removeLayer(mapMarker);
+            mapMarker = null;
+        }
+        await loadAddresses();
+    } catch (error) {
+        showToast(error.message, true);
+    }
+}
+
+async function handleAddressListClick(event) {
+    const button = event.target.closest("[data-address-select]");
+    if (!button) {
+        return;
+    }
+
+    const addressID = Number(button.dataset.addressSelect);
+    try {
+        const response = await api("/api/customer/addresses/select", {
+            method: "PUT",
+            body: JSON.stringify({ addressID }),
+        });
+        showToast(response.message || "Delivery address selected");
+        await loadAddresses();
+    } catch (error) {
+        showToast(error.message, true);
+    }
 }
 
 function bindEvents() {
@@ -734,26 +974,171 @@ function bindEvents() {
     selectors.profileOrdersList?.addEventListener("click", handleItemReviewAction);
     selectors.profileReviewsList?.addEventListener("click", handleOrderReviewAction);
     selectors.profileReviewsList?.addEventListener("click", handleItemReviewAction);
+    selectors.profileAddressesList?.addEventListener("click", handleAddressListClick);
+    selectors.addressCreateForm?.addEventListener("submit", handleAddressFormSubmit);
     selectors.featuredMenuItems?.addEventListener("click", handleMenuGridClick);
     selectors.browseResults?.addEventListener("click", handleMenuGridClick);
     selectors.profileUpdateForm?.addEventListener("submit", handleProfileUpdate);
     selectors.profileDeleteBtn?.addEventListener("click", handleProfileDelete);
-    selectors.clearCartBtn?.addEventListener("click", () => {
-        state.cart = [];
-        persistCart();
-        renderCart();
-        showToast("Cart cleared");
+    selectors.clearCartBtn?.addEventListener("click", async () => {
+        try {
+            const response = await api("/api/customer/cart", { method: "DELETE" });
+            showToast(response.message || "Cart cleared");
+            await refreshCart();
+        } catch (error) {
+            showToast(error.message, true);
+        }
     });
     selectors.cartItems?.addEventListener("click", handleCartClick);
+    selectors.paymentDemoActions?.addEventListener("click", handlePaymentDemoClick);
+}
+
+let addressMap = null;
+let mapMarker = null;
+
+function initAddressMap() {
+    if (addressMap || pageName !== "profile") {
+        return;
+    }
+
+    const mapContainer = document.getElementById("address-map");
+    if (!mapContainer || addressMap) {
+        return;
+    }
+
+    addressMap = L.map("address-map").setView([23.0225, 72.5714], 13);
+
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: "&copy; OpenStreetMap contributors",
+        maxZoom: 19,
+    }).addTo(addressMap);
+
+    addressMap.on("click", (e) => {
+        const { lat, lng } = e.latlng;
+        setAddressMarker(lat, lng);
+    });
+}
+
+function setAddressMarker(lat, lng) {
+    const latInput = document.getElementById("address-latitude");
+    const lngInput = document.getElementById("address-longitude");
+
+    if (latInput) latInput.value = lat.toFixed(4);
+    if (lngInput) lngInput.value = lng.toFixed(4);
+
+    if (!addressMap) {
+        initAddressMap();
+    }
+
+    if (mapMarker) {
+        addressMap.removeLayer(mapMarker);
+    }
+
+    mapMarker = L.marker([lat, lng]).addTo(addressMap);
+    addressMap.setView([lat, lng], 15);
+}
+
+function getLocationErrorMessage(error) {
+    if (error.code === error.NETWORK_ERROR) {
+        return "Network error. Please check your internet connection.";
+    }
+    if (error.code === error.PERMISSION_DENIED) {
+        return "Location permission denied. Please allow location access in your browser settings.";
+    }
+    if (error.code === error.POSITION_UNAVAILABLE) {
+        return "Location information is unavailable in your area.";
+    }
+    if (error.code === error.TIMEOUT) {
+        return "Location request timed out. Try again.";
+    }
+    return "Unable to detect location.";
+}
+
+function getGeolocation() {
+    if (!navigator.geolocation) {
+        showToast("Geolocation is not supported by your browser", true);
+        return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+        (position) => {
+            const lat = Number(position.coords.latitude).toFixed(4);
+            const lng = Number(position.coords.longitude).toFixed(4);
+            setAddressMarker(parseFloat(lat), parseFloat(lng));
+            showToast("Location detected successfully");
+        },
+        (error) => {
+            showToast(getLocationErrorMessage(error), true);
+        },
+        {
+            enableHighAccuracy: true,
+            timeout: 12000,
+            maximumAge: 60000,
+        },
+    );
+}
+
+async function handleMembershipPurchase() {
+    try {
+        const response = await api("/api/customer/membership/purchase", {
+            method: "POST",
+            body: { paymentMode: "online" },
+        });
+        showToast(response.message || "Membership purchased successfully");
+        await loadProfile();
+    } catch (error) {
+        showToast(error.message, true);
+    }
+}
+
+function renderMembershipStatus(user) {
+    const membershipSection = document.getElementById("membership-section");
+    const membershipStatusText = document.getElementById("membership-status-text");
+    const purchaseBtn = document.getElementById("purchase-membership-btn");
+    const membershipForm = document.getElementById("membership-form");
+    const confirmBtn = document.getElementById("confirm-membership-btn");
+    const cancelBtn = document.getElementById("cancel-membership-btn");
+
+    if (!membershipSection) {
+        return;
+    }
+
+    if (user?.membership === 1) {
+        const dueDate = user.membershipDueDate ? new Date(user.membershipDueDate).toLocaleDateString() : "-";
+        membershipStatusText.textContent = `Member until ${dueDate}`;
+        membershipStatusText.className = "membership-active";
+        purchaseBtn.style.display = "none";
+        membershipForm.classList.add("hidden");
+    } else {
+        membershipStatusText.textContent = "Not a member yet";
+        membershipStatusText.className = "membership-inactive";
+        purchaseBtn.style.display = "block";
+        membershipForm.classList.add("hidden");
+    }
+
+    purchaseBtn?.addEventListener("click", () => {
+        membershipForm.classList.toggle("hidden");
+    });
+
+    confirmBtn?.addEventListener("click", handleMembershipPurchase);
+    cancelBtn?.addEventListener("click", () => {
+        membershipForm.classList.add("hidden");
+    });
 }
 
 async function bootstrap() {
-    updateCartBadge();
     bindEvents();
 
     const authorized = await ensureCustomerSession();
     if (!authorized) {
         return;
+    }
+
+    try {
+        await refreshCart();
+        await refreshLastPaymentStatus();
+    } catch (error) {
+        showToast(error.message, true);
     }
 
     const params = new URLSearchParams(window.location.search);
@@ -772,8 +1157,29 @@ async function bootstrap() {
             await populateBrowsePage(params.get("search") || "", params.get("restaurantID") || "");
         } else if (pageName === "profile") {
             await loadProfile();
+            setTimeout(() => {
+                initAddressMap();
+                const geolocationBtn = document.getElementById("use-geolocation-btn");
+                const clearMapBtn = document.getElementById("clear-map-btn");
+                geolocationBtn?.addEventListener("click", (e) => {
+                    e.preventDefault();
+                    getGeolocation();
+                });
+                clearMapBtn?.addEventListener("click", (e) => {
+                    e.preventDefault();
+                    if (mapMarker && addressMap) {
+                        addressMap.removeLayer(mapMarker);
+                        mapMarker = null;
+                    }
+                    const latInput = document.getElementById("address-latitude");
+                    const lngInput = document.getElementById("address-longitude");
+                    if (latInput) latInput.value = "";
+                    if (lngInput) lngInput.value = "";
+                });
+            }, 100);
         } else if (pageName === "cart") {
             renderCart();
+            await refreshLastPaymentStatus();
         }
     } catch (error) {
         showToast(error.message, true);
