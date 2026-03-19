@@ -6,10 +6,18 @@ const selectors = {
     signupRestaurantFields: document.getElementById("signup-restaurant-fields"),
     detectDeliveryLocationBtn: document.getElementById("signup-detect-delivery-location"),
     detectRestaurantLocationBtn: document.getElementById("signup-detect-restaurant-location"),
+    clearRestaurantLocationBtn: document.getElementById("signup-clear-restaurant-location"),
     deliveryLocationText: document.getElementById("signup-delivery-location-text"),
     restaurantLocationText: document.getElementById("signup-restaurant-location-text"),
+    restaurantLatInput: document.getElementById("signup-restaurant-lat"),
+    restaurantLngInput: document.getElementById("signup-restaurant-lng"),
+    restaurantLatitudeInput: document.getElementById("signup-restaurant-latitude"),
+    restaurantLongitudeInput: document.getElementById("signup-restaurant-longitude"),
     toast: document.getElementById("toast"),
 };
+
+let restaurantMap = null;
+let restaurantMarker = null;
 
 function showToast(message, isError = false) {
     selectors.toast.textContent = message;
@@ -34,9 +42,14 @@ async function api(path, options = {}) {
 
 function renderSignupFields() {
     const signupAs = selectors.signupAs.value;
-    selectors.signupMemberFields.classList.toggle("hidden", signupAs === "");
+    const showMemberFields = signupAs === "Member" || signupAs === "DeliveryPartner";
+    selectors.signupMemberFields.classList.toggle("hidden", !showMemberFields);
     selectors.signupDeliveryFields.classList.toggle("hidden", signupAs !== "DeliveryPartner");
     selectors.signupRestaurantFields.classList.toggle("hidden", signupAs !== "Restaurant");
+
+    if (signupAs === "Restaurant") {
+        initializeRestaurantMap();
+    }
 }
 
 function getLocationErrorMessage(error) {
@@ -67,10 +80,15 @@ function detectLocation(target) {
 
     navigator.geolocation.getCurrentPosition(
         (position) => {
-            const lat = Number(position.coords.latitude).toFixed(6);
-            const lng = Number(position.coords.longitude).toFixed(6);
+            const lat = Number(position.coords.latitude);
+            const lng = Number(position.coords.longitude);
             latInput.value = lat;
             lngInput.value = lng;
+
+            if (target === "restaurant") {
+                setRestaurantLocation(lat, lng, true);
+            }
+
             locationText.textContent = `Location detected: ${lat}, ${lng}`;
             showToast("Location detected successfully");
         },
@@ -85,6 +103,79 @@ function detectLocation(target) {
     );
 }
 
+function setRestaurantLocation(lat, lng, centerMap = false) {
+    const parsedLat = Number(lat);
+    const parsedLng = Number(lng);
+
+    if (!Number.isFinite(parsedLat) || !Number.isFinite(parsedLng)) {
+        return;
+    }
+
+    selectors.restaurantLatInput.value = String(parsedLat);
+    selectors.restaurantLngInput.value = String(parsedLng);
+    selectors.restaurantLatitudeInput.value = String(parsedLat);
+    selectors.restaurantLongitudeInput.value = String(parsedLng);
+    selectors.restaurantLocationText.textContent = `Location selected: ${parsedLat}, ${parsedLng}`;
+
+    if (!restaurantMap || !window.L) {
+        return;
+    }
+
+    if (!restaurantMarker) {
+        restaurantMarker = window.L.marker([parsedLat, parsedLng]).addTo(restaurantMap);
+    } else {
+        restaurantMarker.setLatLng([parsedLat, parsedLng]);
+    }
+
+    if (centerMap) {
+        restaurantMap.setView([parsedLat, parsedLng], 16);
+    }
+}
+
+function clearRestaurantLocation() {
+    selectors.restaurantLatInput.value = "";
+    selectors.restaurantLngInput.value = "";
+    selectors.restaurantLatitudeInput.value = "";
+    selectors.restaurantLongitudeInput.value = "";
+    selectors.restaurantLocationText.textContent = "Location not detected yet.";
+
+    if (restaurantMap && restaurantMarker) {
+        restaurantMap.removeLayer(restaurantMarker);
+        restaurantMarker = null;
+    }
+}
+
+function initializeRestaurantMap() {
+    if (restaurantMap || !window.L) {
+        return;
+    }
+
+    const mapElement = document.getElementById("signup-restaurant-map");
+    if (!mapElement) {
+        return;
+    }
+
+    restaurantMap = window.L.map(mapElement).setView([23.0225, 72.5714], 12);
+
+    window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        maxZoom: 19,
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    }).addTo(restaurantMap);
+
+    restaurantMap.on("click", (event) => {
+        const lat = Number(event.latlng.lat);
+        const lng = Number(event.latlng.lng);
+        setRestaurantLocation(lat, lng, false);
+    });
+
+    // Ensure Leaflet sizes correctly when map appears after section unhide.
+    setTimeout(() => {
+        if (restaurantMap) {
+            restaurantMap.invalidateSize();
+        }
+    }, 120);
+}
+
 async function handleSignup(event) {
     event.preventDefault();
     const signupAs = selectors.signupAs.value;
@@ -94,7 +185,7 @@ async function handleSignup(event) {
         return;
     }
 
-    const member = {
+    let member = {
         name: document.getElementById("signup-member-name").value.trim(),
         email: document.getElementById("signup-member-email").value.trim(),
         password: document.getElementById("signup-member-password").value,
@@ -127,24 +218,34 @@ async function handleSignup(event) {
     if (signupAs === "Restaurant") {
         const restaurantLat = document.getElementById("signup-restaurant-lat").value;
         const restaurantLng = document.getElementById("signup-restaurant-lng").value;
+        const restaurantName = document.getElementById("signup-restaurant-name").value.trim();
+        const restaurantPhone = document.getElementById("signup-restaurant-phone").value.trim();
+        const restaurantEmail = document.getElementById("signup-restaurant-email").value.trim();
+        const restaurantPassword = document.getElementById("signup-restaurant-password").value;
+
+        member = {
+            name: restaurantName,
+            email: restaurantEmail,
+            password: restaurantPassword,
+            phoneNumber: restaurantPhone,
+        };
+        payload.member = member;
+
         if (!restaurantLat || !restaurantLng) {
-            showToast("Please detect location for Restaurant signup", true);
+            showToast("Please choose restaurant location using map or geolocation", true);
             return;
         }
 
-        const ratingRaw = document.getElementById("signup-restaurant-rating").value;
         payload.restaurant = {
-            name: document.getElementById("signup-restaurant-name").value.trim(),
-            contactPhone: document.getElementById("signup-restaurant-phone").value.trim(),
-            isOpen: document.getElementById("signup-restaurant-open").checked,
-            isVerified: document.getElementById("signup-restaurant-verified").checked,
-            averageRating: ratingRaw ? Number(ratingRaw) : null,
+            name: restaurantName,
+            contactPhone: restaurantPhone,
+            email: restaurantEmail,
+            password: restaurantPassword,
             addressLine: document.getElementById("signup-restaurant-address").value.trim(),
             city: document.getElementById("signup-restaurant-city").value.trim(),
             zipCode: document.getElementById("signup-restaurant-zip").value.trim(),
             latitude: Number(restaurantLat),
             longitude: Number(restaurantLng),
-            discontinued: document.getElementById("signup-restaurant-discontinued").checked,
         };
     }
 
@@ -158,7 +259,15 @@ async function handleSignup(event) {
         localStorage.setItem("qb_portal", activeRole);
         showToast("Signup successful. Redirecting to dashboard...");
         setTimeout(() => {
-            window.location.href = activeRole === "Customer" ? "/customer" : "/";
+            if (activeRole === "Customer") {
+                window.location.href = "/customer";
+                return;
+            }
+            if (activeRole === "RestaurantManager") {
+                window.location.href = "/restaurant";
+                return;
+            }
+            window.location.href = "/";
         }, 500);
     } catch (err) {
         showToast(err.message, true);
@@ -170,6 +279,21 @@ function bindEvents() {
     selectors.signupAs.addEventListener("change", renderSignupFields);
     selectors.detectDeliveryLocationBtn.addEventListener("click", () => detectLocation("delivery"));
     selectors.detectRestaurantLocationBtn.addEventListener("click", () => detectLocation("restaurant"));
+    selectors.clearRestaurantLocationBtn.addEventListener("click", clearRestaurantLocation);
+    selectors.restaurantLatitudeInput.addEventListener("input", () => {
+        const lat = Number(selectors.restaurantLatitudeInput.value);
+        const lng = Number(selectors.restaurantLongitudeInput.value);
+        if (Number.isFinite(lat) && Number.isFinite(lng)) {
+            setRestaurantLocation(lat, lng, true);
+        }
+    });
+    selectors.restaurantLongitudeInput.addEventListener("input", () => {
+        const lat = Number(selectors.restaurantLatitudeInput.value);
+        const lng = Number(selectors.restaurantLongitudeInput.value);
+        if (Number.isFinite(lat) && Number.isFinite(lng)) {
+            setRestaurantLocation(lat, lng, true);
+        }
+    });
 }
 
 bindEvents();

@@ -45,6 +45,8 @@ CREATE TABLE Restaurant (
     restaurantID INT PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
     contactPhone CHAR(10) NOT NULL,
+    email VARCHAR(100) NOT NULL UNIQUE,
+    password VARCHAR(100) NOT NULL,
     isOpen BOOLEAN NOT NULL,
     isVerified BOOLEAN NOT NULL,
     averageRating FLOAT CHECK (averageRating BETWEEN 1 AND 5),
@@ -300,17 +302,17 @@ INSERT INTO DeliveryPartner(partnerID, vehicleNumber, licenseID, dateOfBirth, cu
 (20,'MH12AB1243','LICDRV20','1990-02-20',11.0168,76.9558,1,4.7,x'00');
 
 -- Restaurants 
-INSERT INTO Restaurant(restaurantID, name, contactPhone, isOpen, isVerified, averageRating, addressLine, city, zipCode, latitude, longitude, discontinued) VALUES
-(201,'Spice Garden','9900000001',1,1,4.5,'MG Road 12','Ahmedabad','380001',23.025,72.540,0),
-(202,'The Curry Bowl','9900000002',1,1,4.2,'Vastrapur Plaza','Ahmedabad','380015',23.030,72.520,0),
-(203,'Urban Pizza','9900000003',1,1,4.0,'Paldi Street 5','Ahmedabad','380007',23.027,72.530,0),
-(204,'Green Leaf','9900000004',0,1,4.3,'CBD Area 8','Ahmedabad','380009',23.021,72.543,0),
-(205,'Sweet Treats','9900000005',1,0,3.9,'Satellite Road','Ahmedabad','380054',23.034,72.550,0),
-(206,'Tiffin House','9900000006',1,1,4.1,'Navrangpura','Ahmedabad','380009',23.026,72.541,0),
-(207,'Seafood Shack','9900000007',0,1,4.4,'Beach Road','Surat','395003',21.170,72.831,0),
-(208,'Grill King','9900000008',1,1,4.6,'Ring Road','Vadodara','390001',22.307,73.181,0),
-(209,'Fusion Café','9900000009',1,1,4.0,'Ellis Bridge','Ahmedabad','380006',23.028,72.538,0),
-(210,'Budget Bites','9900000010',1,1,3.8,'College Street','Ahmedabad','380014',23.024,72.535,0);
+INSERT INTO Restaurant(restaurantID, name, contactPhone, email, password, isOpen, isVerified, averageRating, addressLine, city, zipCode, latitude, longitude, discontinued) VALUES
+(201,'Spice Garden','9900000001','restaurant201@quickbites.local','rest201',1,1,4.5,'MG Road 12','Ahmedabad','380001',23.025,72.540,0),
+(202,'The Curry Bowl','9900000002','restaurant202@quickbites.local','rest202',1,1,4.2,'Vastrapur Plaza','Ahmedabad','380015',23.030,72.520,0),
+(203,'Urban Pizza','9900000003','restaurant203@quickbites.local','rest203',1,1,4.0,'Paldi Street 5','Ahmedabad','380007',23.027,72.530,0),
+(204,'Green Leaf','9900000004','restaurant204@quickbites.local','rest204',0,1,4.3,'CBD Area 8','Ahmedabad','380009',23.021,72.543,0),
+(205,'Sweet Treats','9900000005','restaurant205@quickbites.local','rest205',1,0,3.9,'Satellite Road','Ahmedabad','380054',23.034,72.550,0),
+(206,'Tiffin House','9900000006','restaurant206@quickbites.local','rest206',1,1,4.1,'Navrangpura','Ahmedabad','380009',23.026,72.541,0),
+(207,'Seafood Shack','9900000007','restaurant207@quickbites.local','rest207',0,1,4.4,'Beach Road','Surat','395003',21.170,72.831,0),
+(208,'Grill King','9900000008','restaurant208@quickbites.local','rest208',1,1,4.6,'Ring Road','Vadodara','390001',22.307,73.181,0),
+(209,'Fusion Café','9900000009','restaurant209@quickbites.local','rest209',1,1,4.0,'Ellis Bridge','Ahmedabad','380006',23.028,72.538,0),
+(210,'Budget Bites','9900000010','restaurant210@quickbites.local','rest210',1,1,3.8,'College Street','Ahmedabad','380014',23.024,72.535,0);
 
 -- MenuItem 
 INSERT INTO MenuItem(restaurantID,itemID,name,description,menuCategory,restaurantPrice,appPrice,isVegetarian,averageRating,preparationTime,isAvailable,discontinued) VALUES

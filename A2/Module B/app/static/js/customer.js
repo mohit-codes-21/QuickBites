@@ -54,6 +54,7 @@ const selectors = {
     paymentDemoActions: document.getElementById("payment-demo-actions"),
     paymentModeOptions: document.getElementById("payment-mode-options"),
     lastPaymentStatus: document.getElementById("last-payment-status"),
+    cartSpecialInstruction: document.getElementById("cart-special-instruction"),
     searchChips: document.querySelectorAll("[data-search-chip]"),
 };
 
@@ -859,14 +860,18 @@ async function handlePaymentDemoClick(event) {
 
     const status = button.dataset.paymentStatus;
     const paymentMode = getSelectedPaymentMode();
+    const specialInstruction = selectors.cartSpecialInstruction?.value?.trim() || "";
     try {
         const response = await api("/api/customer/cart/payment-demo", {
             method: "POST",
-            body: JSON.stringify({ status, paymentMode }),
+            body: JSON.stringify({ status, paymentMode, specialInstruction }),
         });
         showToast(response.message || `Demo payment marked as ${status}`);
         if (response.data?.notifyRestaurant) {
             window.alert("Restaurant has been notified");
+        }
+        if (response.data?.orderPlaced && selectors.cartSpecialInstruction) {
+            selectors.cartSpecialInstruction.value = "";
         }
         if (status === "processing" && response.data?.paymentID) {
             scheduleProcessingRecheck(response.data.paymentID);

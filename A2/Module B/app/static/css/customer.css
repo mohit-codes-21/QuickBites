@@ -607,6 +607,17 @@
     cursor: pointer;
 }
 
+.cart-special-instruction {
+    width: 100%;
+    padding: 0.7rem;
+    border: 1px solid var(--customer-line);
+    border-radius: 8px;
+    font-size: 0.9rem;
+    resize: vertical;
+    min-height: 72px;
+    box-sizing: border-box;
+}
+
 /* Button Styles */
 .btn-primary {
     background: var(--customer-accent);
