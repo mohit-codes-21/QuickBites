@@ -95,6 +95,16 @@ def verify_and_migrate_password(connection, member_id, raw_password, stored_pass
     return True
 
 
+def verify_password_value(raw_password, stored_password):
+    if not isinstance(stored_password, str):
+        return False
+
+    if stored_password.startswith("$2a$") or stored_password.startswith("$2b$") or stored_password.startswith("$2y$"):
+        return bcrypt.checkpw(raw_password.encode("utf-8"), stored_password.encode("utf-8"))
+
+    return raw_password == stored_password
+
+
 def get_bearer_token():
     auth_header = request.headers.get("Authorization", "")
     if not auth_header.startswith("Bearer "):
@@ -390,8 +400,88 @@ def login():
         member = cursor.fetchone()
 
         if not member:
-            write_activity_log("LOGIN_FAILED", {"email": email, "reason": "member_not_found", "ip": request.remote_addr})
-            return json_response(status=401, message="Invalid credentials")
+            # Support seeded restaurant credentials present in Restaurant table by linking them
+            # to a Member account on first successful login.
+            cursor.execute(
+                """
+                SELECT restaurantID, name, email, password, contactPhone, isDeleted
+                FROM Restaurant
+                WHERE email = %s
+                LIMIT 1
+                """,
+                (email,),
+            )
+            restaurant_row = cursor.fetchone()
+
+            if (
+                restaurant_row
+                and int(restaurant_row.get("isDeleted", 0)) == 0
+                and (login_as in {"", "RestaurantManager"})
+                and verify_password_value(password, restaurant_row.get("password", ""))
+            ):
+                stored_rest_password = restaurant_row.get("password", "")
+                if not (
+                    stored_rest_password.startswith("$2a$")
+                    or stored_rest_password.startswith("$2b$")
+                    or stored_rest_password.startswith("$2y$")
+                ):
+                    stored_rest_password = hash_password(password)
+                    cursor.execute(
+                        "UPDATE Restaurant SET password = %s WHERE restaurantID = %s",
+                        (stored_rest_password, restaurant_row["restaurantID"]),
+                    )
+
+                cursor.execute("SELECT COALESCE(MAX(memberID), 0) + 1 AS nextID FROM Member")
+                next_member_id = int(cursor.fetchone()["nextID"])
+
+                cursor.execute(
+                    """
+                    INSERT INTO Member(memberID, name, email, password, phoneNumber, createdAt, isDeleted)
+                    VALUES (%s, %s, %s, %s, %s, NOW(), 0)
+                    """,
+                    (
+                        next_member_id,
+                        restaurant_row["name"],
+                        restaurant_row["email"],
+                        stored_rest_password,
+                        restaurant_row["contactPhone"],
+                    ),
+                )
+
+                cursor.execute("SELECT roleID FROM Roles WHERE roleName = 'RestaurantManager' LIMIT 1")
+                role_row = cursor.fetchone()
+                if not role_row:
+                    connection.rollback()
+                    return json_response(status=500, message="RestaurantManager role missing in Roles table")
+
+                cursor.execute(
+                    "INSERT INTO MemberRoleMapping(memberID, roleID) VALUES (%s, %s)",
+                    (next_member_id, role_row["roleID"]),
+                )
+
+                write_audit_log(
+                    connection,
+                    None,
+                    "INSERT",
+                    "Member",
+                    next_member_id,
+                    {
+                        "source": "restaurant_seed_link",
+                        "restaurantID": restaurant_row["restaurantID"],
+                        "email": restaurant_row["email"],
+                    },
+                )
+
+                member = {
+                    "memberID": next_member_id,
+                    "name": restaurant_row["name"],
+                    "email": restaurant_row["email"],
+                    "password": stored_rest_password,
+                    "isDeleted": 0,
+                }
+            else:
+                write_activity_log("LOGIN_FAILED", {"email": email, "reason": "member_not_found", "ip": request.remote_addr})
+                return json_response(status=401, message="Invalid credentials")
 
         if int(member.get("isDeleted", 0)) == 1:
             write_activity_log("LOGIN_FAILED", {"email": email, "reason": "account_deleted", "ip": request.remote_addr})
