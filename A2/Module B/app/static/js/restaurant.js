@@ -273,13 +273,17 @@ function formatAssignment(order) {
         return "Not assigned";
     }
 
+    const deliveredDisplay = order.orderStatus === "Delivered"
+        ? formatDate(order.deliveryTime)
+        : "-";
+
     return `
         <div class="order-items-list">
             <span>ID: ${order.AssignmentID}</span>
             <span>Partner: ${order.PartnerID || "-"}</span>
             <span>Accepted: ${formatDate(order.acceptanceTime)}</span>
             <span>Pickup: ${formatDate(order.pickupTime)}</span>
-            <span>Delivered: ${formatDate(order.deliveryTime)}</span>
+            <span>Delivered: ${deliveredDisplay}</span>
         </div>
     `;
 }

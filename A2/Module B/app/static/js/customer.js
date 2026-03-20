@@ -347,6 +347,7 @@ function renderProfileOrders() {
                 </summary>
                 <div class="expand-body">
                     <p><strong>Total:</strong> Rs ${Number(order.totalAmount).toFixed(2)} · <strong>Payment:</strong> ${order.paymentStatus || "-"}</p>
+                    ${order.PartnerID ? `<p><strong>Delivery Partner:</strong> ${order.deliveryPartnerName || "-"} (${order.deliveryPartnerPhone || "-"}) · <strong>Live Location:</strong> ${order.deliveryPartnerLatitude ?? "-"}, ${order.deliveryPartnerLongitude ?? "-"}</p>` : ""}
                     <div class="review-row">
                         <span><strong>Restaurant Rating:</strong> ${order.restaurantRating ?? "-"}</span>
                         <span><strong>Delivery Rating:</strong> ${order.deliveryRating ?? "-"}</span>
@@ -510,10 +511,13 @@ async function loadRestaurants() {
     state.restaurants = payload.data || [];
 }
 
-async function loadMenuItems(search = "", restaurantID = "") {
+async function loadMenuItems(search = "", restaurantName = "", restaurantID = "") {
     const query = new URLSearchParams();
     if (search) {
         query.set("search", search);
+    }
+    if (restaurantName) {
+        query.set("restaurantName", restaurantName);
     }
     if (restaurantID) {
         query.set("restaurantID", restaurantID);
@@ -744,16 +748,16 @@ async function populateRestaurantsPage() {
     applyRestaurantFilter();
 }
 
-async function populateBrowsePage(initialSearch = "", initialRestaurant = "") {
+async function populateBrowsePage(initialSearch = "", initialRestaurantName = "", initialRestaurantID = "") {
     const search = initialSearch || selectors.browseSearchInput?.value.trim() || "";
-    const restaurantID = initialRestaurant || selectors.browseRestaurantInput?.value.trim() || "";
+    const restaurantName = initialRestaurantName || selectors.browseRestaurantInput?.value.trim() || "";
     if (selectors.browseSearchInput) {
         selectors.browseSearchInput.value = search;
     }
     if (selectors.browseRestaurantInput) {
-        selectors.browseRestaurantInput.value = restaurantID;
+        selectors.browseRestaurantInput.value = restaurantName;
     }
-    await loadMenuItems(search, restaurantID);
+    await loadMenuItems(search, restaurantName, initialRestaurantID);
     renderMenuCards(selectors.browseResults, state.menuItems);
 }
 
@@ -1159,7 +1163,11 @@ async function bootstrap() {
                 applyRestaurantFilter();
             }
         } else if (pageName === "browse") {
-            await populateBrowsePage(params.get("search") || "", params.get("restaurantID") || "");
+            await populateBrowsePage(
+                params.get("search") || "",
+                params.get("restaurantName") || "",
+                params.get("restaurantID") || "",
+            );
         } else if (pageName === "profile") {
             await loadProfile();
             setTimeout(() => {

@@ -338,6 +338,10 @@ async function handleLogin(event) {
             window.location.href = "/restaurant";
             return;
         }
+        if ((payload.data.member.activeRole || loginAs) === "DeliveryPartner") {
+            window.location.href = "/delivery";
+            return;
+        }
         await loadCurrentUser();
         selectors.portfolioInput.value = state.user.memberID;
         await loadPortfolio(state.user.memberID);
@@ -584,6 +588,10 @@ async function bootstrap() {
     }
     if (state.token && state.activePortal === "RestaurantManager") {
         window.location.href = "/restaurant";
+        return;
+    }
+    if (state.token && state.activePortal === "DeliveryPartner") {
+        window.location.href = "/delivery";
         return;
     }
 

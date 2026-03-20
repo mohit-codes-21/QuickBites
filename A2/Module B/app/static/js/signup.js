@@ -267,6 +267,10 @@ async function handleSignup(event) {
                 window.location.href = "/restaurant";
                 return;
             }
+            if (activeRole === "DeliveryPartner") {
+                window.location.href = "/delivery";
+                return;
+            }
             window.location.href = "/";
         }, 500);
     } catch (err) {

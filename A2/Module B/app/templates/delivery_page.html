@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>QuickBites | Delivery Dashboard</title>
+    <link rel="stylesheet" href="/static/css/styles.css" />
+    <link rel="stylesheet" href="/static/css/delivery.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+</head>
+<body class="delivery-body">
+    <header class="delivery-nav-shell">
+        <nav class="delivery-nav">
+            <a href="/delivery" class="brand-mark">
+                <span class="brand-kicker">QuickBites</span>
+                <strong>Delivery Console</strong>
+            </a>
+            <div class="delivery-nav-links">
+                <button class="nav-tab-btn active" data-tab="live" type="button">Live Orders</button>
+                <button class="nav-tab-btn" data-tab="fulfillment" type="button">Fulfillment</button>
+                <button class="nav-tab-btn" data-tab="profile" type="button">Profile</button>
+            </div>
+            <div class="delivery-nav-actions">
+                <span id="delivery-user-chip" class="user-chip">Delivery Partner</span>
+                <button id="delivery-refresh-btn" class="btn-secondary" type="button">Refresh</button>
+                <button id="delivery-logout-btn" class="btn-danger" type="button">Logout</button>
+            </div>
+        </nav>
+    </header>
+
+    <main class="delivery-page">
+        <section class="delivery-hero card">
+            <p class="hero-eyebrow">Live delivery operations</p>
+            <h1 id="delivery-hero-name">Delivery Partner Dashboard</h1>
+            <p id="delivery-hero-email" class="hero-subtext">Email: -</p>
+            <div class="hero-metrics">
+                <span id="hero-metric-rating" class="metric-pill">Avg Rating: -</span>
+                <span id="hero-metric-fulfilled" class="metric-pill">Orders Fulfilled: 0</span>
+                <span id="hero-metric-active" class="metric-pill">Active Orders: 0</span>
+                <span id="hero-metric-location" class="metric-pill">Live Location: -</span>
+            </div>
+        </section>
+
+        <section class="quick-access-grid">
+            <button class="feature-card" data-tab="live" type="button">
+                <h3>Live Orders</h3>
+                <p>Pick the nearest available pickup. You can only handle one active order at a time.</p>
+            </button>
+            <button class="feature-card" data-tab="fulfillment" type="button">
+                <h3>Order Fulfillment</h3>
+                <p>Track pickup to delivery on map, contact restaurant/customer, and update status.</p>
+            </button>
+            <button class="feature-card" data-tab="profile" type="button">
+                <h3>Partner Profile</h3>
+                <p>View, edit, or delete your delivery partner account details.</p>
+            </button>
+        </section>
+
+        <section id="tab-live" class="tab-pane active">
+            <article class="card">
+                <div class="section-title-row">
+                    <h2>Live Orders (Nearest First)</h2>
+                    <button id="reload-live-orders-btn" class="btn-secondary" type="button">Reload</button>
+                </div>
+                <div id="active-order-warning" class="banner hidden"></div>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Order</th>
+                                <th>Restaurant Pickup</th>
+                                <th>Customer Delivery</th>
+                                <th>Total</th>
+                                <th>ETA</th>
+                                <th>Distance Score</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="delivery-live-orders-body"></tbody>
+                    </table>
+                </div>
+            </article>
+
+            <article class="card">
+                <h3>Completed Orders</h3>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Assignment</th>
+                                <th>Order</th>
+                                <th>Restaurant</th>
+                                <th>Customer</th>
+                                <th>Total</th>
+                                <th>Delivered</th>
+                            </tr>
+                        </thead>
+                        <tbody id="delivery-completed-orders-body"></tbody>
+                    </table>
+                </div>
+            </article>
+        </section>
+
+        <section id="tab-fulfillment" class="tab-pane">
+            <article class="card">
+                <div class="section-title-row">
+                    <h2>Active Fulfillment</h2>
+                    <button id="reload-active-order-btn" class="btn-secondary" type="button">Reload Active</button>
+                </div>
+                <div id="fulfillment-empty" class="empty-state">No active order selected yet.</div>
+                <div id="fulfillment-content" class="hidden">
+                    <div id="fulfillment-map" style="width:100%; height:360px; border:1px solid rgba(15,23,42,0.15); border-radius:10px;"></div>
+                    <div class="fulfillment-grid">
+                        <article>
+                            <h4>Restaurant (Pickup)</h4>
+                            <p id="fulfillment-restaurant-name">-</p>
+                            <p id="fulfillment-restaurant-contact">-</p>
+                            <p id="fulfillment-restaurant-address">-</p>
+                        </article>
+                        <article>
+                            <h4>Customer (Delivery)</h4>
+                            <p id="fulfillment-customer-name">-</p>
+                            <p id="fulfillment-customer-contact">-</p>
+                            <p id="fulfillment-customer-address">-</p>
+                        </article>
+                    </div>
+                    <div class="status-row">
+                        <label>
+                            Update Status
+                            <select id="delivery-status-select">
+                                <option value="OutForDelivery">OutForDelivery</option>
+                                <option value="Delivered">Delivered</option>
+                            </select>
+                        </label>
+                        <button id="delivery-status-save-btn" type="button">Save Status</button>
+                    </div>
+                </div>
+            </article>
+        </section>
+
+        <section id="tab-profile" class="tab-pane">
+            <article class="card">
+                <h2>Delivery Partner Profile</h2>
+                <dl id="delivery-profile-view" class="profile-list"></dl>
+            </article>
+            <article class="card">
+                <h3>Update Profile</h3>
+                <form id="delivery-profile-form" class="grid-form">
+                    <input type="text" name="name" placeholder="name" />
+                    <input type="email" name="email" placeholder="email" />
+                    <input type="text" name="phoneNumber" placeholder="phoneNumber" maxlength="10" />
+                    <input type="password" name="password" placeholder="new password (optional)" />
+                    <input type="text" name="vehicleNumber" placeholder="vehicleNumber" />
+                    <input type="text" name="licenseID" placeholder="licenseID" />
+                    <label>
+                        Set isOnline
+                        <select name="isOnlineChoice">
+                            <option value="" selected>Do not change</option>
+                            <option value="true">True</option>
+                            <option value="false">False</option>
+                        </select>
+                    </label>
+                    <button type="submit">Save Changes</button>
+                </form>
+            </article>
+            <article class="card danger-zone">
+                <h3>Delete Profile</h3>
+                <p>This action permanently deactivates your delivery partner account.</p>
+                <button id="delivery-delete-profile-btn" type="button" class="btn-danger">Delete Profile</button>
+            </article>
+        </section>
+    </main>
+
+    <div id="toast" class="toast hidden"></div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+    <script src="/static/js/delivery.js"></script>
+</body>
+</html>
