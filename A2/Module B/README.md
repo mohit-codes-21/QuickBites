@@ -110,6 +110,49 @@ Open in browser:
 
 ---
 
+## 3.1) Run with Makefile (Linux/macOS or Windows with make installed)
+
+From `Module B`:
+
+```powershell
+make run
+```
+
+Useful targets:
+
+- `make venv` -> create virtual environment if missing
+- `make install` -> install dependencies in virtual environment
+- `make run` -> venv + install + run app
+- `make clean` -> remove virtual environment
+
+If PowerShell says `make` is not recognized, use `run.ps1` (below).
+
+---
+
+## 3.2) Run with PowerShell Script (Windows)
+
+From `Module B`:
+
+```powershell
+.\run.ps1 -Target run
+```
+
+Useful targets:
+
+- `.\run.ps1 -Target venv`
+- `.\run.ps1 -Target install`
+- `.\run.ps1 -Target run`
+- `.\run.ps1 -Target clean`
+- `.\run.ps1 -Target help`
+
+If script execution is blocked:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\run.ps1 -Target run
+```
+
+---
+
 ## 4) Role Portals / Routes
 
 - Main login/signup portal: `/`
