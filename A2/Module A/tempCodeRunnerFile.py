@@ -1,1 +1,0 @@
-tree.insert(9,1)
