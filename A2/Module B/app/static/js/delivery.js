@@ -132,9 +132,9 @@ function renderLiveOrders() {
 
     for (const order of state.liveOrders) {
         const row = document.createElement("tr");
-        const acceptBlocked = state.activeAssignment || order.orderStatus !== "Preparing";
+        const acceptBlocked = state.activeAssignment || order.orderStatus !== "ReadyForPickup";
         const disabled = acceptBlocked ? "disabled" : "";
-        const buttonText = order.orderStatus === "Preparing" ? "Accept" : "Waiting";
+        const buttonText = order.orderStatus === "ReadyForPickup" ? "Accept" : "Waiting";
         row.innerHTML = `
             <td>#${order.orderID}<br /><small>${order.orderStatus}</small></td>
             <td>${order.restaurantName}<br /><small>${order.restaurantAddress}, ${order.restaurantCity}</small></td>

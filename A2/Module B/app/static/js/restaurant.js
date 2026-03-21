@@ -296,14 +296,19 @@ function renderOrders() {
 
     for (const order of state.orders) {
         const paymentMode = order.paymentMode === "COD" ? "COD" : order.paymentMode === "OnQuickBites" ? "Online" : "-";
-        const baseOptions = ORDER_STATUS
-            .map((status) => `<option value="${status}" ${status === order.orderStatus ? "selected" : ""}>${status}</option>`)
-            .join("");
-        const statusLockedForRestaurant = order.orderStatus === "OutForDelivery" || order.orderStatus === "Delivered";
-        const options = ORDER_STATUS.includes(order.orderStatus)
-            ? baseOptions
-            : `<option value="${order.orderStatus}" selected disabled>Current: ${order.orderStatus}</option>${baseOptions}`;
-        const saveDisabled = statusLockedForRestaurant ? "disabled" : "";
+        let nextStatuses = [];
+        if (order.orderStatus === "Created") {
+            nextStatuses = ["Preparing"];
+        } else if (order.orderStatus === "Preparing") {
+            nextStatuses = ["ReadyForPickup"];
+        } else if (order.orderStatus === "ReadyForPickup" && order.AssignmentID) {
+            nextStatuses = ["OutForDelivery"];
+        }
+
+        const options = nextStatuses.length
+            ? nextStatuses.map((status) => `<option value="${status}">${status}</option>`).join("")
+            : `<option value="${order.orderStatus}" selected disabled>Current: ${order.orderStatus}</option>`;
+        const saveDisabled = nextStatuses.length ? "" : "disabled";
 
         const row = document.createElement("tr");
         row.innerHTML = `

@@ -248,7 +248,7 @@ def get_active_delivery_assignment(connection, partner_id):
         FROM Delivery_Assignments da
         JOIN Orders o ON o.orderID = da.OrderID
         WHERE da.PartnerID = %s
-                    AND o.orderStatus IN ('Preparing', 'ReadyForPickup', 'OutForDelivery')
+                    AND o.orderStatus IN ('ReadyForPickup', 'OutForDelivery')
         ORDER BY da.acceptanceTime DESC
         LIMIT 1
         """,
@@ -2263,7 +2263,7 @@ def get_delivery_profile():
             SELECT
                 COUNT(*) AS totalAssignments,
                 COALESCE(SUM(CASE WHEN o.orderStatus = 'Delivered' THEN 1 ELSE 0 END), 0) AS deliveredAssignments,
-                COALESCE(SUM(CASE WHEN o.orderStatus IN ('Preparing', 'ReadyForPickup', 'OutForDelivery') THEN 1 ELSE 0 END), 0) AS activeAssignments
+                COALESCE(SUM(CASE WHEN o.orderStatus IN ('ReadyForPickup', 'OutForDelivery') THEN 1 ELSE 0 END), 0) AS activeAssignments
             FROM Delivery_Assignments da
             JOIN Orders o ON o.orderID = da.OrderID
             WHERE da.PartnerID = %s
@@ -2393,9 +2393,9 @@ def accept_delivery_order(order_id):
         if not order_row:
             close_request_connection()
             return json_response(status=404, message="Order not found")
-        if order_row["orderStatus"] != "Preparing":
+        if order_row["orderStatus"] != "ReadyForPickup":
             close_request_connection()
-            return json_response(status=400, message="Only Preparing orders can be accepted")
+            return json_response(status=400, message="Only ReadyForPickup orders can be accepted")
 
         cursor.execute("SELECT 1 AS assignedFlag FROM Delivery_Assignments WHERE OrderID = %s LIMIT 1", (order_id,))
         if cursor.fetchone():
@@ -3203,6 +3203,30 @@ def update_restaurant_order_status(order_id):
         if is_restaurant_manager_only and order_row["orderStatus"] in {"Delivered"}:
             close_request_connection()
             return json_response(status=403, message="This order status is managed by delivery partners")
+
+        if is_restaurant_manager_only:
+            current_status = order_row["orderStatus"]
+            allowed_next_statuses = {
+                "Created": {"Preparing"},
+                "Preparing": {"ReadyForPickup"},
+                "ReadyForPickup": {"OutForDelivery"},
+            }.get(current_status, set())
+
+            if new_status not in allowed_next_statuses:
+                close_request_connection()
+                return json_response(
+                    status=400,
+                    message=f"Invalid status transition: {current_status} -> {new_status}",
+                )
+
+            if current_status == "ReadyForPickup" and new_status == "OutForDelivery":
+                cursor.execute(
+                    "SELECT 1 AS assignedFlag FROM Delivery_Assignments WHERE OrderID = %s LIMIT 1",
+                    (order_id,),
+                )
+                if not cursor.fetchone():
+                    close_request_connection()
+                    return json_response(status=400, message="Assign a delivery partner before moving to OutForDelivery")
 
         cursor = connection.cursor()
         cursor.execute(
