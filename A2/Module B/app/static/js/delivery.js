@@ -7,6 +7,7 @@ const state = {
     activeOrder: null,
     activeAssignment: null,
     completedOrders: [],
+    liveOrdersBlockedMessage: "",
     activeTab: "live",
     positionWatchId: null,
     locationPushAt: 0,
@@ -45,6 +46,9 @@ const selectors = {
     fulfillmentCustomerName: document.getElementById("fulfillment-customer-name"),
     fulfillmentCustomerContact: document.getElementById("fulfillment-customer-contact"),
     fulfillmentCustomerAddress: document.getElementById("fulfillment-customer-address"),
+    fulfillmentPaymentMode: document.getElementById("fulfillment-payment-mode"),
+    fulfillmentPaymentStatus: document.getElementById("fulfillment-payment-status"),
+    paymentCollectedBtn: document.getElementById("delivery-payment-collected-btn"),
     statusSelect: document.getElementById("delivery-status-select"),
     statusSaveBtn: document.getElementById("delivery-status-save-btn"),
     profileView: document.getElementById("delivery-profile-view"),
@@ -109,6 +113,15 @@ function renderHero() {
 function renderLiveOrders() {
     selectors.liveOrdersBody.innerHTML = "";
 
+    if (state.liveOrdersBlockedMessage) {
+        selectors.activeOrderWarning.classList.remove("hidden");
+        selectors.activeOrderWarning.textContent = state.liveOrdersBlockedMessage;
+        const row = document.createElement("tr");
+        row.innerHTML = '<td colspan="7">To view live orders, set isOnline to true.</td>';
+        selectors.liveOrdersBody.appendChild(row);
+        return;
+    }
+
     if (state.activeAssignment) {
         selectors.activeOrderWarning.classList.remove("hidden");
         selectors.activeOrderWarning.textContent = `Active assignment #${state.activeAssignment.AssignmentID} is in progress. Finish it before taking another order.`;
@@ -119,9 +132,9 @@ function renderLiveOrders() {
 
     for (const order of state.liveOrders) {
         const row = document.createElement("tr");
-        const acceptBlocked = state.activeAssignment || order.orderStatus !== "ReadyForPickup";
+        const acceptBlocked = state.activeAssignment || order.orderStatus !== "Preparing";
         const disabled = acceptBlocked ? "disabled" : "";
-        const buttonText = order.orderStatus === "ReadyForPickup" ? "Accept" : "Waiting";
+        const buttonText = order.orderStatus === "Preparing" ? "Accept" : "Waiting";
         row.innerHTML = `
             <td>#${order.orderID}<br /><small>${order.orderStatus}</small></td>
             <td>${order.restaurantName}<br /><small>${order.restaurantAddress}, ${order.restaurantCity}</small></td>
@@ -182,8 +195,15 @@ function renderFulfillment() {
     selectors.fulfillmentCustomerContact.textContent = `Phone: ${order.customerPhone} | Email: ${order.customerEmail}`;
     selectors.fulfillmentCustomerAddress.textContent = `${order.customerAddress}, ${order.customerCity} ${order.customerZip}`;
 
-    selectors.statusSelect.value = order.orderStatus === "Delivered" ? "Delivered" : "OutForDelivery";
-    selectors.statusSaveBtn.disabled = order.orderStatus === "Delivered";
+    selectors.fulfillmentPaymentMode.textContent = `Mode: ${order.paymentType || "-"}`;
+    selectors.fulfillmentPaymentStatus.textContent = `Status: ${order.paymentStatus || "-"}`;
+    const showCODCollect = order.paymentType === "COD" && order.paymentStatus !== "Success";
+    selectors.paymentCollectedBtn.classList.toggle("hidden", !showCODCollect);
+    const isCODPendingCollection = order.paymentType === "COD" && order.paymentStatus !== "Success";
+
+    selectors.statusSelect.value = "Delivered";
+    selectors.statusSaveBtn.disabled = order.orderStatus === "Delivered" || order.orderStatus !== "OutForDelivery" || isCODPendingCollection;
+    selectors.statusSaveBtn.title = isCODPendingCollection ? "Collect COD payment before marking Delivered" : "";
 
     renderFulfillmentMap();
 }
@@ -257,7 +277,10 @@ async function loadProfileAndStats() {
 async function loadLiveOrders() {
     const payload = await api("/api/delivery/live-orders");
     state.liveOrders = payload.data.orders || [];
-    state.activeAssignment = payload.data.activeAssignment || state.activeAssignment;
+    state.liveOrdersBlockedMessage = payload.data?.canViewLiveOrders === false
+        ? (payload.message || "To view live orders, set isOnline to true.")
+        : "";
+    state.activeAssignment = payload.data?.activeAssignment ?? null;
     renderLiveOrders();
 }
 
@@ -329,12 +352,34 @@ async function handleSaveStatus() {
         return;
     }
 
+    if (state.activeOrder.paymentType === "COD" && state.activeOrder.paymentStatus !== "Success") {
+        showToast("Collect COD payment before marking Delivered", true);
+        return;
+    }
+
     try {
         await api(`/api/delivery/orders/${state.activeOrder.orderID}/status`, {
             method: "PUT",
             body: JSON.stringify({ orderStatus: selectors.statusSelect.value }),
         });
         showToast("Order status updated");
+        await loadAll();
+    } catch (error) {
+        showToast(error.message, true);
+    }
+}
+
+async function handlePaymentCollected() {
+    if (!state.activeOrder) {
+        showToast("No active order", true);
+        return;
+    }
+
+    try {
+        await api(`/api/delivery/orders/${state.activeOrder.orderID}/payment-collected`, {
+            method: "PUT",
+        });
+        showToast("COD payment marked as collected");
         await loadAll();
     } catch (error) {
         showToast(error.message, true);
@@ -410,7 +455,11 @@ async function pushLiveLocation(latitude, longitude) {
     try {
         await api("/api/delivery/location", {
             method: "PUT",
-            body: JSON.stringify({ latitude, longitude, isOnline: true }),
+            body: JSON.stringify({
+                latitude,
+                longitude,
+                isOnline: Boolean(state.partner?.isOnline),
+            }),
         });
     } catch (error) {
         // Keep tracker running even if a periodic update fails.
@@ -480,6 +529,7 @@ function bindEvents() {
     selectors.reloadActiveOrderBtn.addEventListener("click", () => loadActiveOrder().catch((error) => showToast(error.message, true)));
     selectors.liveOrdersBody.addEventListener("click", handleLiveOrderActions);
     selectors.statusSaveBtn.addEventListener("click", handleSaveStatus);
+    selectors.paymentCollectedBtn.addEventListener("click", handlePaymentCollected);
     selectors.profileForm.addEventListener("submit", handleProfileUpdate);
     selectors.profileDeleteBtn.addEventListener("click", handleDeleteProfile);
 }

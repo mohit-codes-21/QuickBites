@@ -167,8 +167,8 @@ CREATE TABLE Delivery_Assignments (
 -- ================= ORDER RATING =================
 CREATE TABLE OrderRating (
     orderID INT PRIMARY KEY,
-    restaurantRating INT CHECK (restaurantRating BETWEEN 1 AND 5),
-    deliveryRating INT CHECK (deliveryRating BETWEEN 1 AND 5),
+    restaurantRating INT CHECK (restaurantRating BETWEEN 1 AND 5) NOT NULL,
+    deliveryRating INT CHECK (deliveryRating BETWEEN 1 AND 5) NOT NULL,
     comment VARCHAR(1000),
     FOREIGN KEY (orderID) REFERENCES Orders(orderID) on delete restrict on update cascade
 );

@@ -53,10 +53,19 @@ const selectors = {
     clearCartBtn: document.getElementById("clear-cart-btn"),
     paymentDemoActions: document.getElementById("payment-demo-actions"),
     paymentModeOptions: document.getElementById("payment-mode-options"),
+    codPlaceOrderWrap: document.getElementById("cod-place-order-wrap"),
+    codPlaceOrderBtn: document.getElementById("cod-place-order-btn"),
     lastPaymentStatus: document.getElementById("last-payment-status"),
     cartSpecialInstruction: document.getElementById("cart-special-instruction"),
     searchChips: document.querySelectorAll("[data-search-chip]"),
 };
+
+function updatePaymentActionsVisibility() {
+    const paymentMode = getSelectedPaymentMode();
+    const isCOD = paymentMode === "cod";
+    selectors.paymentDemoActions?.classList.toggle("hidden", isCOD);
+    selectors.codPlaceOrderWrap?.classList.toggle("hidden", !isCOD);
+}
 
 function renderLastPaymentStatus(data) {
     if (!selectors.lastPaymentStatus) {
@@ -877,8 +886,40 @@ async function handlePaymentDemoClick(event) {
         if (response.data?.orderPlaced && selectors.cartSpecialInstruction) {
             selectors.cartSpecialInstruction.value = "";
         }
-        if (status === "processing" && response.data?.paymentID) {
+        if (status === "processing" && response.data?.paymentID && response.data?.paymentType !== "COD") {
             scheduleProcessingRecheck(response.data.paymentID);
+        }
+        await refreshCart();
+        await refreshLastPaymentStatus();
+    } catch (error) {
+        const redirectTo = error.payload?.data?.redirectTo;
+        if (redirectTo) {
+            showToast(error.message || "Please set delivery address first", true);
+            setTimeout(() => {
+                window.location.href = redirectTo;
+            }, 400);
+            return;
+        }
+        showToast(error.message, true);
+    }
+}
+
+async function handleCODPlaceOrder() {
+    const paymentMode = getSelectedPaymentMode();
+    if (paymentMode !== "cod") {
+        showToast("COD mode is not selected", true);
+        return;
+    }
+
+    const specialInstruction = selectors.cartSpecialInstruction?.value?.trim() || "";
+    try {
+        const response = await api("/api/customer/cart/payment-demo", {
+            method: "POST",
+            body: JSON.stringify({ status: "processing", paymentMode: "cod", specialInstruction }),
+        });
+        showToast(response.message || "Order placed successfully with COD");
+        if (response.data?.orderPlaced && selectors.cartSpecialInstruction) {
+            selectors.cartSpecialInstruction.value = "";
         }
         await refreshCart();
         await refreshLastPaymentStatus();
@@ -1000,6 +1041,8 @@ function bindEvents() {
     });
     selectors.cartItems?.addEventListener("click", handleCartClick);
     selectors.paymentDemoActions?.addEventListener("click", handlePaymentDemoClick);
+    selectors.codPlaceOrderBtn?.addEventListener("click", handleCODPlaceOrder);
+    selectors.paymentModeOptions?.addEventListener("change", updatePaymentActionsVisibility);
 }
 
 let addressMap = null;
@@ -1191,6 +1234,7 @@ async function bootstrap() {
                 });
             }, 100);
         } else if (pageName === "cart") {
+            updatePaymentActionsVisibility();
             renderCart();
             await refreshLastPaymentStatus();
         }

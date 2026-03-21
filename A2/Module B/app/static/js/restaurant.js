@@ -11,7 +11,7 @@ const state = {
 let restaurantProfileMap = null;
 let restaurantProfileMarker = null;
 
-const ORDER_STATUS = ["Preparing", "ReadyForPickup"];
+const ORDER_STATUS = ["Preparing", "ReadyForPickup", "OutForDelivery"];
 
 const selectors = {
     navButtons: document.querySelectorAll(".nav-tab-btn"),
@@ -273,6 +273,9 @@ function formatAssignment(order) {
         return "Not assigned";
     }
 
+    const pickupDisplay = (order.orderStatus === "OutForDelivery" || order.orderStatus === "Delivered")
+        ? formatDate(order.pickupTime)
+        : "-";
     const deliveredDisplay = order.orderStatus === "Delivered"
         ? formatDate(order.deliveryTime)
         : "-";
@@ -282,7 +285,7 @@ function formatAssignment(order) {
             <span>ID: ${order.AssignmentID}</span>
             <span>Partner: ${order.PartnerID || "-"}</span>
             <span>Accepted: ${formatDate(order.acceptanceTime)}</span>
-            <span>Pickup: ${formatDate(order.pickupTime)}</span>
+            <span>Pickup: ${pickupDisplay}</span>
             <span>Delivered: ${deliveredDisplay}</span>
         </div>
     `;
@@ -292,6 +295,7 @@ function renderOrders() {
     selectors.ordersBody.innerHTML = "";
 
     for (const order of state.orders) {
+        const paymentMode = order.paymentMode === "COD" ? "COD" : order.paymentMode === "OnQuickBites" ? "Online" : "-";
         const baseOptions = ORDER_STATUS
             .map((status) => `<option value="${status}" ${status === order.orderStatus ? "selected" : ""}>${status}</option>`)
             .join("");
@@ -307,6 +311,7 @@ function renderOrders() {
             <td>${formatDate(order.orderTime)}</td>
             <td>${order.customerID}</td>
             <td>Rs ${order.totalAmount}</td>
+            <td>${paymentMode}</td>
             <td>${order.paymentStatus || "-"}</td>
             <td>${formatItems(order.items)}</td>
             <td>${formatAssignment(order)}</td>

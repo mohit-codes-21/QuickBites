@@ -1,7 +1,7 @@
 import json
 import os
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from functools import wraps
 
 import bcrypt
@@ -17,15 +17,30 @@ ACTIVITY_LOG_FILE_PATH = os.path.join(LOG_DIR, "activity.log")
 
 app = Flask(__name__)
 
+IST = timezone(timedelta(hours=5, minutes=30))
+
+
+def ist_now():
+    # Store timezone-normalized wall-clock values in DATETIME columns.
+    return datetime.now(IST).replace(tzinfo=None)
+
+
+def ist_now_iso():
+    return datetime.now(IST).isoformat()
+
 
 def get_db_connection():
-    return mysql.connector.connect(
+    connection = mysql.connector.connect(
         host=os.getenv("QB_DB_HOST", "127.0.0.1"),
         port=int(os.getenv("QB_DB_PORT", "3306")),
         user=os.getenv("QB_DB_USER", "qb_admin"), # qb_admin
         password=os.getenv("QB_DB_PASSWORD", "qb_admin@123"), # qb_admin@123
         database=os.getenv("QB_DB_NAME", "QB"),
     )
+    cursor = connection.cursor()
+    cursor.execute("SET time_zone = '+05:30'")
+    cursor.close()
+    return connection
 
 
 def json_response(data=None, status=200, message=None):
@@ -41,7 +56,7 @@ def write_audit_log(connection, member_id, action, table_name, record_id, detail
     os.makedirs(LOG_DIR, exist_ok=True)
 
     log_entry = {
-        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "timestamp": ist_now_iso(),
         "memberID": member_id,
         "action": action,
         "tableName": table_name,
@@ -68,7 +83,7 @@ def write_audit_log(connection, member_id, action, table_name, record_id, detail
 def write_activity_log(event_type, details):
     os.makedirs(LOG_DIR, exist_ok=True)
     activity_entry = {
-        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "timestamp": ist_now_iso(),
         "event": event_type,
         "details": details,
     }
@@ -233,7 +248,7 @@ def get_active_delivery_assignment(connection, partner_id):
         FROM Delivery_Assignments da
         JOIN Orders o ON o.orderID = da.OrderID
         WHERE da.PartnerID = %s
-          AND o.orderStatus IN ('ReadyForPickup', 'OutForDelivery')
+                    AND o.orderStatus IN ('Preparing', 'ReadyForPickup', 'OutForDelivery')
         ORDER BY da.acceptanceTime DESC
         LIMIT 1
         """,
@@ -288,6 +303,7 @@ def expire_pending_order_payments(connection, customer_id=None):
             SET status = 'Failed'
             WHERE paymentFor = 'Order'
               AND status = 'Pending'
+                            AND paymentType = 'OnQuickBites'
               AND transactionTime <= (NOW() - INTERVAL 2 MINUTE)
             """
         )
@@ -299,6 +315,7 @@ def expire_pending_order_payments(connection, customer_id=None):
             WHERE paymentFor = 'Order'
               AND status = 'Pending'
               AND customerID = %s
+                            AND paymentType = 'OnQuickBites'
               AND transactionTime <= (NOW() - INTERVAL 2 MINUTE)
             """,
             (customer_id,),
@@ -514,8 +531,14 @@ def login():
         if not login_as:
             login_as = roles[0] if roles else ""
 
+        if "DeliveryPartner" in roles:
+            cursor.execute(
+                "UPDATE DeliveryPartner SET isOnline = 1 WHERE partnerID = %s",
+                (member["memberID"],),
+            )
+
         token = secrets.token_hex(32)
-        now = datetime.utcnow()
+        now = ist_now()
         expires_at = now + timedelta(hours=int(os.getenv("QB_SESSION_HOURS", "8")))
 
         cursor.execute(
@@ -537,7 +560,7 @@ def login():
         return json_response(
             {
                 "token": token,
-                "expiresAt": expires_at.isoformat() + "Z",
+                "expiresAt": expires_at.isoformat(),
                 "member": {
                     "memberID": member["memberID"],
                     "name": member["name"],
@@ -674,7 +697,7 @@ def signup():
                 connection.rollback()
                 return json_response(status=400, message="Invalid dateOfBirth format. Use YYYY-MM-DD")
 
-            today = datetime.utcnow().date()
+            today = ist_now().date()
             age = today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
             if age < 18:
                 connection.rollback()
@@ -777,7 +800,7 @@ def signup():
         )
 
         token = secrets.token_hex(32)
-        now = datetime.utcnow()
+        now = ist_now()
         expires_at = now + timedelta(hours=int(os.getenv("QB_SESSION_HOURS", "8")))
         cursor.execute(
             "INSERT INTO Sessions(sessionToken, memberID, createdAt, expiresAt) VALUES (%s, %s, %s, %s)",
@@ -800,7 +823,7 @@ def signup():
             data={
                 **created_payload,
                 "token": token,
-                "expiresAt": expires_at.isoformat() + "Z",
+                "expiresAt": expires_at.isoformat(),
                 "member": {
                     "memberID": next_member_id,
                     "name": member_name,
@@ -827,6 +850,11 @@ def logout():
     connection = request.db_connection
     try:
         cursor = connection.cursor()
+        if "DeliveryPartner" in request.current_user.get("roles", []):
+            cursor.execute(
+                "UPDATE DeliveryPartner SET isOnline = 0 WHERE partnerID = %s",
+                (request.current_user["memberID"],),
+            )
         cursor.execute("DELETE FROM Sessions WHERE sessionToken = %s", (request.current_user["sessionToken"],))
         connection.commit()
         write_activity_log(
@@ -1805,7 +1833,9 @@ def customer_payment_demo():
             (payment_id, member_id, cart_total, db_payment_mode, db_status),
         )
 
-        if status_in == "successful":
+        should_place_order = status_in == "successful" or (status_in == "processing" and db_payment_mode == "COD")
+
+        if should_place_order:
             selected_address_id = get_selected_address_id(connection, member_id)
             if selected_address_id is None:
                 connection.rollback()
@@ -1824,7 +1854,7 @@ def customer_payment_demo():
             cursor.execute("SELECT COALESCE(MAX(orderID), 0) + 1 AS nextID FROM Orders")
             next_order_id = cursor.fetchone()["nextID"]
 
-            now = datetime.utcnow()
+            now = ist_now()
             estimated_time = now + timedelta(minutes=45)
             target_restaurant_id = restaurant_ids[0]
 
@@ -1932,12 +1962,14 @@ def customer_payment_demo():
                 "status": db_status,
                 "paymentType": db_payment_mode,
                 "amount": round(cart_total, 2),
-                "orderPlaced": status_in == "successful",
-                "notifyRestaurant": status_in == "successful",
+                "orderPlaced": should_place_order,
+                "notifyRestaurant": should_place_order,
             },
             message=(
-                "Order placed successfully. Restaurant has been notified."
-                if status_in == "successful"
+                "Order placed successfully with COD. Payment pending collection."
+                if should_place_order and db_payment_mode == "COD"
+                else "Order placed successfully. Restaurant has been notified."
+                if should_place_order
                 else f"Demo payment marked as {status_in}"
             ),
         )
@@ -2129,7 +2161,7 @@ def purchase_membership():
             (payment_id, member_id, membership_amount, db_payment_mode),
         )
 
-        membership_due = datetime.utcnow() + timedelta(days=365)
+        membership_due = ist_now() + timedelta(days=365)
         
         cursor.execute(
             """
@@ -2231,7 +2263,7 @@ def get_delivery_profile():
             SELECT
                 COUNT(*) AS totalAssignments,
                 COALESCE(SUM(CASE WHEN o.orderStatus = 'Delivered' THEN 1 ELSE 0 END), 0) AS deliveredAssignments,
-                COALESCE(SUM(CASE WHEN o.orderStatus IN ('ReadyForPickup', 'OutForDelivery') THEN 1 ELSE 0 END), 0) AS activeAssignments
+                COALESCE(SUM(CASE WHEN o.orderStatus IN ('Preparing', 'ReadyForPickup', 'OutForDelivery') THEN 1 ELSE 0 END), 0) AS activeAssignments
             FROM Delivery_Assignments da
             JOIN Orders o ON o.orderID = da.OrderID
             WHERE da.PartnerID = %s
@@ -2267,6 +2299,21 @@ def delivery_live_orders():
         if not profile:
             close_request_connection()
             return json_response(status=404, message="Delivery partner profile not found")
+
+        if int(profile.get("isOnline", 0)) == 0:
+            close_request_connection()
+            return json_response(
+                {
+                    "partnerLocation": {
+                        "latitude": float(profile["currentLatitude"]),
+                        "longitude": float(profile["currentLongitude"]),
+                    },
+                    "activeAssignment": None,
+                    "orders": [],
+                    "canViewLiveOrders": False,
+                },
+                message="To view live orders, set isOnline to true.",
+            )
 
         active_assignment = get_active_delivery_assignment(connection, target_member_id)
 
@@ -2314,6 +2361,7 @@ def delivery_live_orders():
             },
             "activeAssignment": active_assignment,
             "orders": rows,
+            "canViewLiveOrders": True,
         })
     except Error as exc:
         close_request_connection()
@@ -2345,9 +2393,9 @@ def accept_delivery_order(order_id):
         if not order_row:
             close_request_connection()
             return json_response(status=404, message="Order not found")
-        if order_row["orderStatus"] != "ReadyForPickup":
+        if order_row["orderStatus"] != "Preparing":
             close_request_connection()
-            return json_response(status=400, message="Only ReadyForPickup orders can be accepted")
+            return json_response(status=400, message="Only Preparing orders can be accepted")
 
         cursor.execute("SELECT 1 AS assignedFlag FROM Delivery_Assignments WHERE OrderID = %s LIMIT 1", (order_id,))
         if cursor.fetchone():
@@ -2357,7 +2405,7 @@ def accept_delivery_order(order_id):
         cursor.execute("SELECT COALESCE(MAX(AssignmentID), 0) + 1 AS nextID FROM Delivery_Assignments")
         next_assignment_id = int(cursor.fetchone()["nextID"])
 
-        now = datetime.utcnow()
+        now = ist_now()
         cursor_insert = connection.cursor()
         cursor_insert.execute(
             """
@@ -2412,6 +2460,7 @@ def get_delivery_active_order():
             """
             SELECT o.orderID, o.orderTime, o.estimatedTime, o.totalAmount, o.orderStatus,
                    o.customerID, o.restaurantID, o.addressID, o.specialInstruction,
+                     p.paymentType, p.status AS paymentStatus,
                    r.name AS restaurantName, r.contactPhone AS restaurantPhone, r.email AS restaurantEmail,
                    r.addressLine AS restaurantAddress, r.city AS restaurantCity, r.zipCode AS restaurantZip,
                    r.latitude AS restaurantLatitude, r.longitude AS restaurantLongitude,
@@ -2419,6 +2468,7 @@ def get_delivery_active_order():
                    a.addressLine AS customerAddress, a.city AS customerCity, a.zipCode AS customerZip,
                    a.latitude AS customerLatitude, a.longitude AS customerLongitude
             FROM Orders o
+                 JOIN Payment p ON p.paymentID = o.paymentID
             JOIN Restaurant r ON r.restaurantID = o.restaurantID
             JOIN Member cm ON cm.memberID = o.customerID
             JOIN Address a ON a.customerID = o.customerID AND a.addressID = o.addressID
@@ -2470,7 +2520,7 @@ def update_delivery_order_status(order_id):
     payload = request.get_json(silent=True) or {}
 
     new_status = str(payload.get("orderStatus", "")).strip()
-    if new_status not in {"OutForDelivery", "Delivered"}:
+    if new_status not in {"Delivered"}:
         close_request_connection()
         return json_response(status=400, message="Invalid order status")
 
@@ -2481,9 +2531,10 @@ def update_delivery_order_status(order_id):
         cursor.execute(
             """
             SELECT da.AssignmentID, da.PartnerID, da.acceptanceTime, da.pickupTime, da.deliveryTime,
-                   o.orderStatus
+                 o.orderStatus, p.paymentType, p.status AS paymentStatus
             FROM Delivery_Assignments da
             JOIN Orders o ON o.orderID = da.OrderID
+             JOIN Payment p ON p.paymentID = o.paymentID
             WHERE da.OrderID = %s
             LIMIT 1
             """,
@@ -2502,29 +2553,24 @@ def update_delivery_order_status(order_id):
         if previous_status == "Delivered":
             close_request_connection()
             return json_response(status=400, message="Order is already delivered")
+        if previous_status != "OutForDelivery":
+            close_request_connection()
+            return json_response(status=400, message="Order must be OutForDelivery before marking Delivered")
+        if row.get("paymentType") == "COD" and row.get("paymentStatus") != "Success":
+            close_request_connection()
+            return json_response(status=400, message="Collect COD payment before marking order as Delivered")
 
         cursor_update = connection.cursor()
         cursor_update.execute("UPDATE Orders SET orderStatus = %s WHERE orderID = %s", (new_status, order_id))
 
-        if new_status == "OutForDelivery":
-            cursor_update.execute(
-                """
-                UPDATE Delivery_Assignments
-                SET pickupTime = NOW(),
-                    deliveryTime = DATE_ADD(NOW(), INTERVAL 1 SECOND)
-                WHERE AssignmentID = %s
-                """,
-                (row["AssignmentID"],),
-            )
-        if new_status == "Delivered":
-            cursor_update.execute(
-                """
-                UPDATE Delivery_Assignments
-                SET deliveryTime = GREATEST(NOW(), DATE_ADD(pickupTime, INTERVAL 1 SECOND))
-                WHERE AssignmentID = %s
-                """,
-                (row["AssignmentID"],),
-            )
+        cursor_update.execute(
+            """
+            UPDATE Delivery_Assignments
+            SET deliveryTime = GREATEST(NOW(), DATE_ADD(pickupTime, INTERVAL 1 SECOND))
+            WHERE AssignmentID = %s
+            """,
+            (row["AssignmentID"],),
+        )
 
         write_audit_log(
             connection,
@@ -2537,6 +2583,64 @@ def update_delivery_order_status(order_id):
         connection.commit()
         close_request_connection()
         return json_response(message="Order status updated")
+    except Error as exc:
+        connection.rollback()
+        close_request_connection()
+        return json_response(status=500, message=f"Database error: {exc}")
+
+
+@app.put("/api/delivery/orders/<int:order_id>/payment-collected")
+@require_roles("DeliveryPartner", "Admin")
+def mark_cod_payment_collected(order_id):
+    connection = request.db_connection
+    current_user = request.current_user
+    partner_id = current_user["memberID"]
+
+    try:
+        cursor = connection.cursor(dictionary=True)
+        cursor.execute(
+            """
+            SELECT da.PartnerID, o.paymentID, p.paymentType, p.status AS paymentStatus
+            FROM Delivery_Assignments da
+            JOIN Orders o ON o.orderID = da.OrderID
+            JOIN Payment p ON p.paymentID = o.paymentID
+            WHERE da.OrderID = %s
+            LIMIT 1
+            """,
+            (order_id,),
+        )
+        row = cursor.fetchone()
+        if not row:
+            close_request_connection()
+            return json_response(status=404, message="Order assignment not found")
+
+        if int(row["PartnerID"]) != int(partner_id) and "Admin" not in current_user.get("roles", []):
+            close_request_connection()
+            return json_response(status=403, message="This order is assigned to a different partner")
+
+        if row["paymentType"] != "COD":
+            close_request_connection()
+            return json_response(status=400, message="Payment mode is not COD")
+
+        if row["paymentStatus"] == "Success":
+            close_request_connection()
+            return json_response(message="Payment already marked as collected")
+
+        cursor_update = connection.cursor()
+        cursor_update.execute("UPDATE Payment SET status = 'Success' WHERE paymentID = %s", (row["paymentID"],))
+
+        write_audit_log(
+            connection,
+            partner_id,
+            "UPDATE",
+            "Payment",
+            row["paymentID"],
+            {"status": "Success", "reason": "cod_collected"},
+        )
+
+        connection.commit()
+        close_request_connection()
+        return json_response(message="COD payment marked as collected")
     except Error as exc:
         connection.rollback()
         close_request_connection()
@@ -3005,7 +3109,8 @@ def restaurant_orders():
             """
             SELECT o.orderID, o.orderTime, o.estimatedTime, o.totalAmount, o.orderStatus,
                    o.customerID, o.addressID,
-                   p.status AS paymentStatus,
+                     p.status AS paymentStatus,
+                     p.paymentType AS paymentMode,
                    da.AssignmentID, da.PartnerID, da.acceptanceTime, da.pickupTime, da.deliveryTime
             FROM Orders o
             LEFT JOIN Payment p ON p.paymentID = o.paymentID
@@ -3054,7 +3159,7 @@ def update_restaurant_order_status(order_id):
 
     new_status = str(payload.get("orderStatus", "")).strip()
     is_restaurant_manager_only = "RestaurantManager" in user.get("roles", []) and "Admin" not in user.get("roles", [])
-    allowed_status = {"Preparing", "ReadyForPickup"} if is_restaurant_manager_only else {
+    allowed_status = {"Preparing", "ReadyForPickup", "OutForDelivery"} if is_restaurant_manager_only else {
         "Created",
         "Preparing",
         "ReadyForPickup",
@@ -3095,7 +3200,7 @@ def update_restaurant_order_status(order_id):
             close_request_connection()
             return json_response(status=404, message="Order not found")
 
-        if is_restaurant_manager_only and order_row["orderStatus"] in {"OutForDelivery", "Delivered"}:
+        if is_restaurant_manager_only and order_row["orderStatus"] in {"Delivered"}:
             close_request_connection()
             return json_response(status=403, message="This order status is managed by delivery partners")
 
@@ -3104,6 +3209,20 @@ def update_restaurant_order_status(order_id):
             "UPDATE Orders SET orderStatus = %s WHERE orderID = %s AND restaurantID = %s",
             (new_status, order_id, restaurant_id),
         )
+
+        if new_status == "OutForDelivery":
+            cursor.execute(
+                """
+                UPDATE Delivery_Assignments
+                SET pickupTime = GREATEST(NOW(), DATE_ADD(acceptanceTime, INTERVAL 1 SECOND)),
+                    deliveryTime = GREATEST(
+                        deliveryTime,
+                        DATE_ADD(GREATEST(NOW(), DATE_ADD(acceptanceTime, INTERVAL 1 SECOND)), INTERVAL 1 SECOND)
+                    )
+                WHERE OrderID = %s
+                """,
+                (order_id,),
+            )
 
         write_audit_log(
             connection,
@@ -3493,7 +3612,7 @@ def create_member():
                 connection.rollback()
                 return json_response(status=400, message="Invalid dateOfBirth format. Use YYYY-MM-DD")
 
-            today = datetime.utcnow().date()
+            today = ist_now().date()
             age = today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
             if age < 18:
                 connection.rollback()
