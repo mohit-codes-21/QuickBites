@@ -2,7 +2,6 @@ from database.bplustree import BPlusTree
 from database.bruteforce import BruteForceDB
 
 class Table:
-    # Look at this line right here! This is where schema and index_type must exist.
     def __init__(self, name, schema, order=8, search_key=None, index_type="bplustree"):
         self.name = name                             
         self.schema = schema                         

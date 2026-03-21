@@ -15,7 +15,6 @@ class BPlusTree:
         node = self.root
         while not node.leaf:
             # bisect_right finds the index where the key should go.
-            # This replaces your linear for-loop and if-statements perfectly.
             idx = bisect.bisect_right(node.keys, key)
             node = node.children[idx]
         return node
@@ -59,7 +58,6 @@ class BPlusTree:
         max_keys = self.order - 1
 
         if node.leaf:
-            # OPTIMIZATION: Use bisect_left to find exact insertion point
             pos = bisect.bisect_left(node.keys, key)
 
             if pos < len(node.keys) and node.keys[pos] == key:
@@ -70,7 +68,6 @@ class BPlusTree:
             return
 
         # Internal node: find child index to descend to
-        # OPTIMIZATION: Use bisect_right to find the correct child branch
         idx = bisect.bisect_right(node.keys, key)
 
         # Recurse FIRST

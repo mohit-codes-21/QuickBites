@@ -4,7 +4,6 @@ class BruteForceDB:
         self.row_ids = []
 
     def insert(self, key, row_id):
-        # O(N) check to enforce unique keys
         for i in range(len(self.keys)):
             if self.keys[i] == key:
                 self.row_ids[i] = row_id
