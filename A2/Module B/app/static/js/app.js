@@ -342,6 +342,10 @@ async function handleLogin(event) {
             window.location.href = "/delivery";
             return;
         }
+        if ((payload.data.member.activeRole || loginAs) === "Admin") {
+            window.location.href = "/admin/dashboard";
+            return;
+        }
         await loadCurrentUser();
         selectors.portfolioInput.value = state.user.memberID;
         await loadPortfolio(state.user.memberID);
@@ -592,6 +596,10 @@ async function bootstrap() {
     }
     if (state.token && state.activePortal === "DeliveryPartner") {
         window.location.href = "/delivery";
+        return;
+    }
+    if (state.token && state.activePortal === "Admin") {
+        window.location.href = "/admin/dashboard";
         return;
     }
 

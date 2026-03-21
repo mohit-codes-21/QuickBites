@@ -1,8 +1,11 @@
 import json
 import os
 import secrets
+import math
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 from functools import wraps
+import re
 
 import bcrypt
 import mysql.connector
@@ -14,10 +17,12 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 LOG_DIR = os.path.abspath(os.path.join(BASE_DIR, "..", "logs"))
 LOG_FILE_PATH = os.path.join(LOG_DIR, "audit.log")
 ACTIVITY_LOG_FILE_PATH = os.path.join(LOG_DIR, "activity.log")
+AUDIT_SYNC_STATE_PATH = os.path.join(LOG_DIR, "audit_sync_state.json")
 
 app = Flask(__name__)
 
 IST = timezone(timedelta(hours=5, minutes=30))
+DELIVERY_RADIUS_KM = 30.0
 
 
 def ist_now():
@@ -52,23 +57,123 @@ def json_response(data=None, status=200, message=None):
     return jsonify(payload), status
 
 
-def write_audit_log(connection, member_id, action, table_name, record_id, details):
-    os.makedirs(LOG_DIR, exist_ok=True)
+def _normalize_log_details(details):
+    if isinstance(details, dict):
+        return dict(details)
+    if details is None:
+        return {}
+    return {"value": str(details)}
 
-    log_entry = {
-        "timestamp": ist_now_iso(),
-        "memberID": member_id,
-        "action": action,
-        "tableName": table_name,
-        "recordID": record_id,
-        "details": details,
-        "path": request.path,
-        "method": request.method,
-        "ip": request.remote_addr,
-    }
+
+def _default_audit_message(action, table_name, record_id):
+    return f"{action} on {table_name} (record: {record_id})"
+
+
+def _default_activity_message(event_type, details):
+    details_map = _normalize_log_details(details)
+    reason = details_map.get("reason")
+    member_id = details_map.get("memberID")
+    email = details_map.get("email")
+
+    suffix_parts = []
+    if member_id is not None:
+        suffix_parts.append(f"memberID={member_id}")
+    if email:
+        suffix_parts.append(f"email={email}")
+    if reason:
+        suffix_parts.append(f"reason={reason}")
+
+    if suffix_parts:
+        return f"{event_type}: " + ", ".join(suffix_parts)
+    return event_type
+
+
+def _read_audit_sync_state():
+    if not os.path.exists(AUDIT_SYNC_STATE_PATH):
+        return {"lastLogID": 0}
+    try:
+        with open(AUDIT_SYNC_STATE_PATH, "r", encoding="utf-8") as state_file:
+            state = json.load(state_file)
+        return {"lastLogID": int(state.get("lastLogID", 0) or 0)}
+    except (OSError, ValueError, TypeError, json.JSONDecodeError):
+        return {"lastLogID": 0}
+
+
+def _write_audit_sync_state(last_log_id):
+    os.makedirs(LOG_DIR, exist_ok=True)
+    with open(AUDIT_SYNC_STATE_PATH, "w", encoding="utf-8") as state_file:
+        json.dump({"lastLogID": int(last_log_id or 0)}, state_file)
+
+
+def sync_audit_file_from_db(connection, batch_size=1000):
+    os.makedirs(LOG_DIR, exist_ok=True)
+    state = _read_audit_sync_state()
+    last_log_id = int(state.get("lastLogID", 0) or 0)
+
+    cursor = connection.cursor(dictionary=True)
+    if last_log_id == 0 and os.path.exists(LOG_FILE_PATH) and os.path.getsize(LOG_FILE_PATH) > 0:
+        cursor.execute("SELECT COALESCE(MAX(logID), 0) AS maxLogID FROM AuditLog")
+        max_row = cursor.fetchone() or {}
+        max_log_id = int(max_row.get("maxLogID", 0) or 0)
+        _write_audit_sync_state(max_log_id)
+        return
+
+    cursor.execute(
+        """
+        SELECT logID, memberID, action, tableName, recordID, timestamp, details
+        FROM AuditLog
+        WHERE logID > %s
+        ORDER BY logID ASC
+        LIMIT %s
+        """,
+        (last_log_id, int(batch_size)),
+    )
+    rows = cursor.fetchall()
+    if not rows:
+        return
 
     with open(LOG_FILE_PATH, "a", encoding="utf-8") as log_file:
-        log_file.write(json.dumps(log_entry) + "\n")
+        for row in rows:
+            details_payload = {}
+            raw_details = row.get("details")
+            if isinstance(raw_details, str) and raw_details.strip():
+                try:
+                    details_payload = json.loads(raw_details)
+                except json.JSONDecodeError:
+                    details_payload = {"raw": raw_details}
+
+            message = details_payload.get("message") if isinstance(details_payload, dict) else None
+            if not message:
+                message = _default_audit_message(row.get("action"), row.get("tableName"), row.get("recordID"))
+
+            log_entry = {
+                "logID": row.get("logID"),
+                "timestamp": row.get("timestamp").isoformat() if row.get("timestamp") else None,
+                "memberID": row.get("memberID"),
+                "action": row.get("action"),
+                "tableName": row.get("tableName"),
+                "recordID": row.get("recordID"),
+                "details": details_payload,
+                "message": message,
+                "path": details_payload.get("path") if isinstance(details_payload, dict) else None,
+                "method": details_payload.get("method") if isinstance(details_payload, dict) else None,
+                "ip": details_payload.get("ip") if isinstance(details_payload, dict) else None,
+                "source": "db-sync",
+            }
+            log_file.write(json.dumps(log_entry) + "\n")
+
+    _write_audit_sync_state(rows[-1].get("logID"))
+
+
+def write_audit_log(connection, member_id, action, table_name, record_id, details, message=None):
+    os.makedirs(LOG_DIR, exist_ok=True)
+
+    details_payload = _normalize_log_details(details)
+    resolved_message = message or _default_audit_message(action, table_name, record_id)
+    details_payload.setdefault("message", resolved_message)
+    details_payload.setdefault("path", request.path)
+    details_payload.setdefault("method", request.method)
+    details_payload.setdefault("ip", request.remote_addr)
 
     cursor = connection.cursor()
     cursor.execute(
@@ -76,16 +181,41 @@ def write_audit_log(connection, member_id, action, table_name, record_id, detail
         INSERT INTO AuditLog(memberID, action, tableName, recordID, details)
         VALUES (%s, %s, %s, %s, %s)
         """,
-        (member_id, action, table_name, str(record_id), json.dumps(details)),
+        (member_id, action, table_name, str(record_id), json.dumps(details_payload)),
     )
+    inserted_log_id = cursor.lastrowid
+
+    log_entry = {
+        "logID": inserted_log_id,
+        "timestamp": ist_now_iso(),
+        "memberID": member_id,
+        "action": action,
+        "tableName": table_name,
+        "recordID": record_id,
+        "details": details_payload,
+        "message": resolved_message,
+        "path": request.path,
+        "method": request.method,
+        "ip": request.remote_addr,
+    }
+
+    with open(LOG_FILE_PATH, "a", encoding="utf-8") as log_file:
+        log_file.write(json.dumps(log_entry) + "\n")
+    _write_audit_sync_state(inserted_log_id)
 
 
-def write_activity_log(event_type, details):
+def write_activity_log(event_type, details, message=None):
     os.makedirs(LOG_DIR, exist_ok=True)
+
+    details_payload = _normalize_log_details(details)
+    resolved_message = message or _default_activity_message(event_type, details_payload)
+    details_payload.setdefault("message", resolved_message)
+
     activity_entry = {
         "timestamp": ist_now_iso(),
         "event": event_type,
-        "details": details,
+        "details": details_payload,
+        "message": resolved_message,
     }
     with open(ACTIVITY_LOG_FILE_PATH, "a", encoding="utf-8") as log_file:
         log_file.write(json.dumps(activity_entry) + "\n")
@@ -169,6 +299,12 @@ def require_auth(fn):
             user = get_current_user(connection)
             if not user:
                 return json_response(status=401, message="Unauthorized")
+
+            try:
+                sync_audit_file_from_db(connection)
+            except Exception:
+                # Sync is best-effort and should not block authenticated requests.
+                pass
 
             request.current_user = user
             request.db_connection = connection
@@ -257,6 +393,78 @@ def get_active_delivery_assignment(connection, partner_id):
     return cursor.fetchone()
 
 
+def recalc_restaurant_average_rating(connection, restaurant_id):
+    cursor = connection.cursor()
+    cursor.execute(
+        """
+        UPDATE Restaurant r
+        SET r.averageRating = (
+            SELECT ROUND(AVG(orr.restaurantRating), 2)
+            FROM Orders o
+            JOIN OrderRating orr ON orr.orderID = o.orderID
+            WHERE o.restaurantID = %s AND orr.restaurantRating IS NOT NULL
+        )
+        WHERE r.restaurantID = %s
+        """,
+        (restaurant_id, restaurant_id),
+    )
+
+
+def recalc_delivery_partner_average_rating(connection, partner_id):
+    cursor = connection.cursor()
+    cursor.execute(
+        """
+        UPDATE DeliveryPartner dp
+        SET dp.averageRating = (
+            SELECT ROUND(AVG(orr.deliveryRating), 2)
+            FROM Delivery_Assignments da
+            JOIN OrderRating orr ON orr.orderID = da.OrderID
+            WHERE da.PartnerID = %s AND orr.deliveryRating IS NOT NULL
+        )
+        WHERE dp.partnerID = %s
+        """,
+        (partner_id, partner_id),
+    )
+
+
+def recalc_menu_item_average_rating(connection, restaurant_id, item_id):
+    cursor = connection.cursor()
+    cursor.execute(
+        """
+        UPDATE MenuItem mi
+        SET mi.averageRating = (
+            SELECT ROUND(AVG(mir.rating), 2)
+            FROM MenuItemRating mir
+            WHERE mir.restaurantID = %s AND mir.itemID = %s AND mir.rating IS NOT NULL
+        )
+        WHERE mi.restaurantID = %s AND mi.itemID = %s
+        """,
+        (restaurant_id, item_id, restaurant_id, item_id),
+    )
+
+
+def recalc_order_linked_aggregate_ratings(connection, order_id):
+    cursor = connection.cursor(dictionary=True)
+    cursor.execute("SELECT restaurantID FROM Orders WHERE orderID = %s LIMIT 1", (order_id,))
+    order_row = cursor.fetchone()
+    if order_row and order_row.get("restaurantID") is not None:
+        recalc_restaurant_average_rating(connection, order_row["restaurantID"])
+
+    cursor.execute(
+        """
+        SELECT PartnerID
+        FROM Delivery_Assignments
+        WHERE OrderID = %s
+        ORDER BY AssignmentID DESC
+        LIMIT 1
+        """,
+        (order_id,),
+    )
+    assignment_row = cursor.fetchone()
+    if assignment_row and assignment_row.get("PartnerID") is not None:
+        recalc_delivery_partner_average_rating(connection, assignment_row["PartnerID"])
+
+
 def calculate_customer_cart_total(connection, customer_id):
     cursor = connection.cursor(dictionary=True)
     cursor.execute(
@@ -278,6 +486,94 @@ def update_customer_cart_total(connection, customer_id):
     return total
 
 
+def loyalty_discount_percent_for_tier(loyalty_tier, membership):
+    try:
+        tier = int(loyalty_tier or 1)
+    except (TypeError, ValueError):
+        tier = 1
+
+    if int(membership or 0) != 1 or tier < 2:
+        return 0.0
+
+    return float(5 + (tier - 2) * 3)
+
+
+def get_customer_loyalty_context(connection, customer_id):
+    cursor = connection.cursor(dictionary=True)
+    cursor.execute(
+        """
+        SELECT loyaltyTier, membership
+        FROM Customer
+        WHERE customerID = %s
+        LIMIT 1
+        """,
+        (customer_id,),
+    )
+    row = cursor.fetchone() or {"loyaltyTier": 1, "membership": 0}
+    tier = int(row.get("loyaltyTier") or 1)
+    membership = int(row.get("membership") or 0)
+    discount_percent = loyalty_discount_percent_for_tier(tier, membership)
+    return {
+        "loyaltyTier": tier,
+        "membership": membership,
+        "discountPercent": discount_percent,
+    }
+
+
+def calculate_discounted_total(subtotal_amount, discount_percent):
+    subtotal = round(float(subtotal_amount or 0), 2)
+    percent = float(discount_percent or 0)
+    discount_amount = round(subtotal * (percent / 100.0), 2)
+    payable_total = round(subtotal - discount_amount, 2)
+    return discount_amount, payable_total
+
+
+def apply_loyalty_tier_progression(connection, customer_id, actor_member_id, trigger):
+    cursor = connection.cursor(dictionary=True)
+    cursor.execute(
+        """
+        SELECT COUNT(*) AS successful_orders
+        FROM Orders o
+        WHERE o.customerID = %s
+          AND EXISTS (
+            SELECT 1 FROM Payment p
+            WHERE p.paymentID = o.paymentID
+              AND p.status = 'Success'
+              AND p.paymentFor = 'Order'
+          )
+        """,
+        (customer_id,),
+    )
+    successful_count = int((cursor.fetchone() or {}).get("successful_orders", 0) or 0)
+
+    if successful_count <= 0 or successful_count % 10 != 0:
+        return
+
+    cursor_update = connection.cursor()
+    cursor_update.execute(
+        """
+        UPDATE Customer
+        SET loyaltyTier = LEAST(5, loyaltyTier + 1)
+        WHERE customerID = %s AND membership = 1 AND loyaltyTier < 5
+        """,
+        (customer_id,),
+    )
+
+    if cursor_update.rowcount > 0:
+        write_audit_log(
+            connection,
+            actor_member_id,
+            "UPDATE",
+            "Customer",
+            customer_id,
+            {
+                "reason": "loyalty_tier_increment",
+                "trigger": trigger,
+                "successful_orders": successful_count,
+            },
+        )
+
+
 def get_selected_address_id(connection, customer_id):
     cursor = connection.cursor(dictionary=True)
     cursor.execute(
@@ -292,6 +588,57 @@ def get_selected_address_id(connection, customer_id):
     )
     row = cursor.fetchone()
     return row["addressID"] if row else None
+
+
+def get_selected_address_location(connection, customer_id):
+    cursor = connection.cursor(dictionary=True)
+    cursor.execute(
+        """
+        SELECT addressID, latitude, longitude
+        FROM Address
+        WHERE customerID = %s AND isSaved = 1
+        ORDER BY addressID
+        LIMIT 1
+        """,
+        (customer_id,),
+    )
+    return cursor.fetchone()
+
+
+def haversine_distance_km(lat1, lon1, lat2, lon2):
+    lat1, lon1, lat2, lon2 = map(float, [lat1, lon1, lat2, lon2])
+    phi1 = math.radians(lat1)
+    phi2 = math.radians(lat2)
+    dphi = math.radians(lat2 - lat1)
+    dlambda = math.radians(lon2 - lon1)
+    a = math.sin(dphi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2) ** 2
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+    return 6371.0 * c
+
+
+def get_restaurant_distance_from_selected_address(connection, customer_id, restaurant_id):
+    selected_address = get_selected_address_location(connection, customer_id)
+    if not selected_address:
+        return None
+
+    cursor = connection.cursor(dictionary=True)
+    cursor.execute(
+        "SELECT latitude, longitude FROM Restaurant WHERE restaurantID = %s AND isDeleted = 0 LIMIT 1",
+        (restaurant_id,),
+    )
+    restaurant = cursor.fetchone()
+    if not restaurant:
+        return None
+
+    try:
+        return haversine_distance_km(
+            selected_address["latitude"],
+            selected_address["longitude"],
+            restaurant["latitude"],
+            restaurant["longitude"],
+        )
+    except (TypeError, ValueError):
+        return None
 
 
 def expire_pending_order_payments(connection, customer_id=None):
@@ -345,6 +692,11 @@ def index():
 @app.route("/admin")
 def admin_index():
     return render_template("index.html", admin_portal=True)
+
+
+@app.route("/admin/dashboard")
+def admin_dashboard_page():
+    return render_template("admin_page.html")
 
 
 @app.route("/signup")
@@ -923,6 +1275,11 @@ def get_portfolio(member_id):
 
         cursor.execute("SELECT * FROM Customer WHERE customerID = %s", (member_id,))
         customer_data = cursor.fetchone()
+        if customer_data:
+            customer_data["membershipDiscount"] = loyalty_discount_percent_for_tier(
+                customer_data.get("loyaltyTier"),
+                customer_data.get("membership"),
+            )
 
         cursor.execute("SELECT * FROM DeliveryPartner WHERE partnerID = %s", (member_id,))
         partner_data = cursor.fetchone()
@@ -1092,6 +1449,14 @@ def customer_profile_orders():
             """
             SELECT o.orderID, o.orderTime, o.orderStatus, o.totalAmount,
                    r.name AS restaurantName, p.status AS paymentStatus,
+                                 r.addressLine AS restaurantAddress,
+                                 r.city AS restaurantCity,
+                                 r.latitude AS restaurantLatitude,
+                                 r.longitude AS restaurantLongitude,
+                                 a.addressLine AS deliveryAddress,
+                                 a.city AS deliveryCity,
+                                 a.latitude AS deliveryLatitude,
+                                 a.longitude AS deliveryLongitude,
                  orr.restaurantRating, orr.deliveryRating, orr.comment AS orderComment,
                  da.PartnerID,
                  dpm.name AS deliveryPartnerName,
@@ -1100,6 +1465,7 @@ def customer_profile_orders():
                  dp.currentLongitude AS deliveryPartnerLongitude
             FROM Orders o
             JOIN Restaurant r ON r.restaurantID = o.restaurantID
+                        JOIN Address a ON a.customerID = o.customerID AND a.addressID = o.addressID
             LEFT JOIN Payment p ON p.paymentID = o.paymentID
             LEFT JOIN OrderRating orr ON orr.orderID = o.orderID
              LEFT JOIN Delivery_Assignments da ON da.OrderID = o.orderID
@@ -1224,6 +1590,8 @@ def upsert_order_review(order_id):
             (order_id, restaurant_rating, delivery_rating, comment),
         )
 
+        recalc_order_linked_aggregate_ratings(connection, order_id)
+
         write_audit_log(
             connection,
             member_id,
@@ -1259,6 +1627,8 @@ def delete_order_review(order_id):
             connection.rollback()
             close_request_connection()
             return json_response(status=404, message="Order review not found")
+
+        recalc_order_linked_aggregate_ratings(connection, order_id)
 
         write_audit_log(connection, member_id, "DELETE", "OrderRating", order_id, {"deleted": True})
         connection.commit()
@@ -1313,6 +1683,8 @@ def upsert_item_review():
             """,
             (restaurant_id, item_id, order_id, rating, comment),
         )
+
+        recalc_menu_item_average_rating(connection, restaurant_id, item_id)
 
         write_audit_log(
             connection,
@@ -1369,6 +1741,8 @@ def delete_item_review():
             connection.rollback()
             close_request_connection()
             return json_response(status=404, message="Item review not found")
+
+        recalc_menu_item_average_rating(connection, restaurant_id, item_id)
 
         write_audit_log(
             connection,
@@ -1574,10 +1948,23 @@ def get_customer_cart():
 
         total_amount = round(total_amount, 2)
         cursor.execute("UPDATE Customer SET cartTotalAmount = %s WHERE customerID = %s", (total_amount, member_id))
+
+        loyalty_context = get_customer_loyalty_context(connection, member_id)
+        discount_amount, payable_total = calculate_discounted_total(total_amount, loyalty_context["discountPercent"])
         connection.commit()
 
         close_request_connection()
-        return json_response({"items": items, "itemCount": item_count, "totalAmount": total_amount})
+        return json_response(
+            {
+                "items": items,
+                "itemCount": item_count,
+                "subtotalAmount": total_amount,
+                "discountPercent": loyalty_context["discountPercent"],
+                "discountAmount": discount_amount,
+                "totalAmount": payable_total,
+                "loyaltyTier": loyalty_context["loyaltyTier"],
+            }
+        )
     except Error as exc:
         connection.rollback()
         close_request_connection()
@@ -1613,7 +2000,7 @@ def upsert_customer_cart_item():
         cursor = connection.cursor(dictionary=True)
         cursor.execute(
             """
-            SELECT mi.restaurantID, mi.itemID
+                        SELECT mi.restaurantID, mi.itemID, r.isOpen
             FROM MenuItem mi
             JOIN Restaurant r ON r.restaurantID = mi.restaurantID
             WHERE mi.restaurantID = %s
@@ -1624,9 +2011,23 @@ def upsert_customer_cart_item():
             """,
             (restaurant_id, item_id),
         )
-        if not cursor.fetchone():
+        item_row = cursor.fetchone()
+        if not item_row:
             close_request_connection()
             return json_response(status=404, message="Menu item not found or unavailable")
+
+        if quantity_delta > 0:
+            if int(item_row.get("isOpen", 0)) != 1:
+                close_request_connection()
+                return json_response(status=400, message="Cannot add to cart: restaurant is currently closed")
+
+            distance_km = get_restaurant_distance_from_selected_address(connection, member_id, restaurant_id)
+            if distance_km is not None and distance_km > DELIVERY_RADIUS_KM:
+                close_request_connection()
+                return json_response(
+                    status=400,
+                    message=f"This restaurant is {distance_km:.2f} km away from your selected address. Max allowed is 30 km.",
+                )
 
         cursor.execute(
             "SELECT quantity FROM CartItem WHERE customerID = %s AND restaurantID = %s AND itemID = %s",
@@ -1795,10 +2196,13 @@ def customer_payment_demo():
             connection.commit()
 
         cursor = connection.cursor(dictionary=True)
-        cart_total = calculate_customer_cart_total(connection, member_id)
-        if cart_total <= 0:
+        cart_subtotal = calculate_customer_cart_total(connection, member_id)
+        if cart_subtotal <= 0:
             close_request_connection()
             return json_response(status=400, message="Cart is empty")
+
+        loyalty_context = get_customer_loyalty_context(connection, member_id)
+        discount_amount, cart_total = calculate_discounted_total(cart_subtotal, loyalty_context["discountPercent"])
 
         cursor.execute(
             """
@@ -1859,6 +2263,25 @@ def customer_payment_demo():
             target_restaurant_id = restaurant_ids[0]
 
             cursor.execute(
+                "SELECT isOpen FROM Restaurant WHERE restaurantID = %s AND isDeleted = 0 LIMIT 1",
+                (target_restaurant_id,),
+            )
+            restaurant_state = cursor.fetchone()
+            if not restaurant_state or int(restaurant_state.get("isOpen", 0)) != 1:
+                connection.rollback()
+                close_request_connection()
+                return json_response(status=400, message="Cannot place order: restaurant is currently closed")
+
+            distance_km = get_restaurant_distance_from_selected_address(connection, member_id, target_restaurant_id)
+            if distance_km is not None and distance_km > DELIVERY_RADIUS_KM:
+                connection.rollback()
+                close_request_connection()
+                return json_response(
+                    status=400,
+                    message=f"Cannot place order: restaurant is {distance_km:.2f} km away from your selected address (max 30 km).",
+                )
+
+            cursor.execute(
                 """
                 INSERT INTO Orders(
                     orderID, orderTime, estimatedTime, totalAmount, orderStatus,
@@ -1896,40 +2319,7 @@ def customer_payment_demo():
 
             cursor.execute("DELETE FROM CartItem WHERE customerID = %s", (member_id,))
             update_customer_cart_total(connection, member_id)
-
-            cursor.execute(
-                """
-                SELECT COUNT(*) AS successful_orders
-                FROM Orders o
-                WHERE o.customerID = %s
-                  AND EXISTS (
-                    SELECT 1 FROM Payment p
-                    WHERE p.paymentID = o.paymentID
-                      AND p.status = 'Success'
-                      AND p.paymentFor = 'Order'
-                  )
-                """,
-                (member_id,),
-            )
-            successful_count = cursor.fetchone()["successful_orders"]
-            
-            if successful_count % 10 == 0 and successful_count > 0:
-                cursor.execute(
-                    """
-                    UPDATE Customer
-                    SET loyaltyTier = LEAST(5, loyaltyTier + 1)
-                    WHERE customerID = %s AND membership = 1
-                    """,
-                    (member_id,),
-                )
-                write_audit_log(
-                    connection,
-                    member_id,
-                    "UPDATE",
-                    "Customer",
-                    member_id,
-                    {"reason": "loyalty_tier_increment", "successful_orders": successful_count},
-                )
+            apply_loyalty_tier_progression(connection, member_id, member_id, "order_placed")
 
             write_audit_log(
                 connection,
@@ -1962,6 +2352,9 @@ def customer_payment_demo():
                 "status": db_status,
                 "paymentType": db_payment_mode,
                 "amount": round(cart_total, 2),
+                "subtotalAmount": round(cart_subtotal, 2),
+                "discountPercent": loyalty_context["discountPercent"],
+                "discountAmount": discount_amount,
                 "orderPlaced": should_place_order,
                 "notifyRestaurant": should_place_order,
             },
@@ -2187,7 +2580,7 @@ def purchase_membership():
             "UPDATE",
             "Customer",
             member_id,
-            {"membership": 1, "membershipDueDate": membership_due.isoformat(), "loyaltyTier": 2},
+            {"membership": 1, "membershipDueDate": membership_due.isoformat(), "loyaltyTier": 2, "discountPercent": 5},
         )
 
         connection.commit()
@@ -2199,6 +2592,7 @@ def purchase_membership():
                 "amount": membership_amount,
                 "membershipDueDate": membership_due.isoformat(),
                 "loyaltyTier": 2,
+                "discountPercent": 5,
             },
             message="Membership purchased successfully! You now have access to loyalty tier benefits.",
         )
@@ -2600,7 +2994,7 @@ def mark_cod_payment_collected(order_id):
         cursor = connection.cursor(dictionary=True)
         cursor.execute(
             """
-            SELECT da.PartnerID, o.paymentID, p.paymentType, p.status AS paymentStatus
+            SELECT da.PartnerID, o.paymentID, o.customerID, o.orderStatus, p.paymentType, p.status AS paymentStatus
             FROM Delivery_Assignments da
             JOIN Orders o ON o.orderID = da.OrderID
             JOIN Payment p ON p.paymentID = o.paymentID
@@ -2622,12 +3016,17 @@ def mark_cod_payment_collected(order_id):
             close_request_connection()
             return json_response(status=400, message="Payment mode is not COD")
 
+        if row.get("orderStatus") != "OutForDelivery":
+            close_request_connection()
+            return json_response(status=400, message="COD can be collected only after order is OutForDelivery")
+
         if row["paymentStatus"] == "Success":
             close_request_connection()
             return json_response(message="Payment already marked as collected")
 
         cursor_update = connection.cursor()
         cursor_update.execute("UPDATE Payment SET status = 'Success' WHERE paymentID = %s", (row["paymentID"],))
+        apply_loyalty_tier_progression(connection, row["customerID"], partner_id, "cod_collected")
 
         write_audit_log(
             connection,
@@ -2858,13 +3257,38 @@ def list_restaurants():
         cursor = connection.cursor(dictionary=True)
         cursor.execute(
             """
-            SELECT restaurantID, name, city, isOpen, isVerified, averageRating
+            SELECT restaurantID, name, city, isOpen, isVerified, averageRating, latitude, longitude
             FROM Restaurant
             WHERE discontinued = 0 AND isDeleted = 0
             ORDER BY name
             """
         )
         rows = cursor.fetchall()
+
+        if "Customer" in request.current_user.get("roles", []):
+            selected_address = get_selected_address_location(connection, request.current_user["memberID"])
+            for row in rows:
+                distance_km = None
+                within_range = True
+                if selected_address:
+                    try:
+                        distance_km = haversine_distance_km(
+                            selected_address["latitude"],
+                            selected_address["longitude"],
+                            row["latitude"],
+                            row["longitude"],
+                        )
+                        within_range = distance_km <= DELIVERY_RADIUS_KM
+                    except (TypeError, ValueError):
+                        distance_km = None
+                        within_range = True
+                row["distanceKm"] = round(distance_km, 2) if distance_km is not None else None
+                row["withinDeliveryRange"] = within_range
+
+        for row in rows:
+            row.pop("latitude", None)
+            row.pop("longitude", None)
+
         close_request_connection()
         return json_response(rows)
     except Error as exc:
@@ -3307,7 +3731,8 @@ def list_menu_items():
          SELECT mi.restaurantID, mi.itemID, mi.name, mi.description, mi.menuCategory,
              mi.restaurantPrice, mi.appPrice, mi.isVegetarian, mi.preparationTime,
                          mi.isAvailable, mi.discontinued,
-               r.name AS restaurantName
+               r.name AS restaurantName, r.isOpen AS restaurantIsOpen,
+               r.latitude AS restaurantLatitude, r.longitude AS restaurantLongitude
         FROM MenuItem mi
         JOIN Restaurant r ON r.restaurantID = mi.restaurantID
         WHERE {where_sql}
@@ -3318,6 +3743,31 @@ def list_menu_items():
         cursor = connection.cursor(dictionary=True)
         cursor.execute(query, tuple(params))
         rows = cursor.fetchall()
+
+        if "Customer" in current_user.get("roles", []):
+            selected_address = get_selected_address_location(connection, current_user["memberID"])
+            for row in rows:
+                distance_km = None
+                within_range = True
+                if selected_address:
+                    try:
+                        distance_km = haversine_distance_km(
+                            selected_address["latitude"],
+                            selected_address["longitude"],
+                            row["restaurantLatitude"],
+                            row["restaurantLongitude"],
+                        )
+                        within_range = distance_km <= DELIVERY_RADIUS_KM
+                    except (TypeError, ValueError):
+                        distance_km = None
+                        within_range = True
+                row["distanceKm"] = round(distance_km, 2) if distance_km is not None else None
+                row["withinDeliveryRange"] = within_range
+
+        for row in rows:
+            row.pop("restaurantLatitude", None)
+            row.pop("restaurantLongitude", None)
+
         close_request_connection()
         return json_response(rows)
     except Error as exc:
@@ -3677,6 +4127,352 @@ def create_member():
         close_request_connection()
 
 
+def _is_safe_identifier(identifier):
+    return bool(re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", identifier or ""))
+
+
+def _get_db_name(connection):
+    cursor = connection.cursor(dictionary=True)
+    cursor.execute("SELECT DATABASE() AS db_name")
+    row = cursor.fetchone()
+    return row["db_name"] if row else os.getenv("QB_DB_NAME", "QB")
+
+
+def _admin_table_exists(connection, table_name):
+    if not _is_safe_identifier(table_name):
+        return False
+    db_name = _get_db_name(connection)
+    cursor = connection.cursor(dictionary=True)
+    cursor.execute(
+        """
+        SELECT 1 AS ok
+        FROM information_schema.tables
+        WHERE table_schema = %s AND table_name = %s AND table_type = 'BASE TABLE'
+        LIMIT 1
+        """,
+        (db_name, table_name),
+    )
+    return bool(cursor.fetchone())
+
+
+def _admin_table_columns(connection, table_name):
+    db_name = _get_db_name(connection)
+    cursor = connection.cursor(dictionary=True)
+    cursor.execute(
+        """
+        SELECT column_name, data_type, is_nullable, column_default, column_key, extra, ordinal_position
+        FROM information_schema.columns
+        WHERE table_schema = %s AND table_name = %s
+        ORDER BY ordinal_position
+        """,
+        (db_name, table_name),
+    )
+    return cursor.fetchall()
+
+
+def _admin_primary_keys(connection, table_name):
+    db_name = _get_db_name(connection)
+    cursor = connection.cursor(dictionary=True)
+    cursor.execute(
+        """
+        SELECT kcu.column_name, kcu.ordinal_position
+        FROM information_schema.table_constraints tc
+        JOIN information_schema.key_column_usage kcu
+          ON tc.constraint_name = kcu.constraint_name
+         AND tc.table_schema = kcu.table_schema
+         AND tc.table_name = kcu.table_name
+        WHERE tc.table_schema = %s
+          AND tc.table_name = %s
+          AND tc.constraint_type = 'PRIMARY KEY'
+        ORDER BY kcu.ordinal_position
+        """,
+        (db_name, table_name),
+    )
+    return [row["column_name"] for row in cursor.fetchall()]
+
+
+def _jsonify_db_value(value):
+    if isinstance(value, Decimal):
+        return float(value)
+    if isinstance(value, (bytes, bytearray)):
+        return value.hex()
+    if hasattr(value, "isoformat"):
+        return value.isoformat()
+    return value
+
+
+def _jsonify_db_row(row):
+    return {key: _jsonify_db_value(value) for key, value in row.items()}
+
+
+@app.get("/api/admin/overview")
+@require_roles("Admin")
+def admin_overview():
+    connection = request.db_connection
+
+    try:
+        cursor = connection.cursor(dictionary=True)
+        counts = {}
+        for table in ["Member", "Customer", "Restaurant", "DeliveryPartner", "Orders", "Payment", "MenuItem", "Delivery_Assignments"]:
+            cursor.execute(f"SELECT COUNT(*) AS c FROM {table}")
+            counts[table] = int(cursor.fetchone()["c"])
+
+        cursor.execute(
+            """
+            SELECT o.orderID, o.orderStatus, o.totalAmount, o.orderTime,
+                   r.name AS restaurantName, p.paymentType, p.status AS paymentStatus
+            FROM Orders o
+            LEFT JOIN Restaurant r ON r.restaurantID = o.restaurantID
+            LEFT JOIN Payment p ON p.paymentID = o.paymentID
+            ORDER BY o.orderTime DESC
+            LIMIT 12
+            """
+        )
+        recent_orders = [_jsonify_db_row(row) for row in cursor.fetchall()]
+
+        close_request_connection()
+        return json_response({"counts": counts, "recentOrders": recent_orders})
+    except Error as exc:
+        close_request_connection()
+        return json_response(status=500, message=f"Database error: {exc}")
+
+
+@app.get("/api/admin/tables")
+@require_roles("Admin")
+def admin_list_tables():
+    connection = request.db_connection
+
+    try:
+        db_name = _get_db_name(connection)
+        cursor = connection.cursor(dictionary=True)
+        cursor.execute(
+            """
+            SELECT table_name
+            FROM information_schema.tables
+            WHERE table_schema = %s AND table_type = 'BASE TABLE'
+            ORDER BY table_name
+            """,
+            (db_name,),
+        )
+        tables = [row["table_name"] for row in cursor.fetchall()]
+        close_request_connection()
+        return json_response(tables)
+    except Error as exc:
+        close_request_connection()
+        return json_response(status=500, message=f"Database error: {exc}")
+
+
+@app.get("/api/admin/tables/<string:table_name>/schema")
+@require_roles("Admin")
+def admin_table_schema(table_name):
+    connection = request.db_connection
+    if not _admin_table_exists(connection, table_name):
+        close_request_connection()
+        return json_response(status=404, message="Table not found")
+
+    try:
+        columns = _admin_table_columns(connection, table_name)
+        primary_keys = _admin_primary_keys(connection, table_name)
+        close_request_connection()
+        return json_response({"columns": columns, "primaryKeys": primary_keys})
+    except Error as exc:
+        close_request_connection()
+        return json_response(status=500, message=f"Database error: {exc}")
+
+
+@app.get("/api/admin/tables/<string:table_name>/rows")
+@require_roles("Admin")
+def admin_table_rows(table_name):
+    connection = request.db_connection
+    if not _admin_table_exists(connection, table_name):
+        close_request_connection()
+        return json_response(status=404, message="Table not found")
+
+    limit = request.args.get("limit", default=100, type=int)
+    offset = request.args.get("offset", default=0, type=int)
+    limit = min(max(limit, 1), 500)
+    offset = max(offset, 0)
+
+    try:
+        cursor = connection.cursor(dictionary=True)
+        cursor.execute(f"SELECT * FROM `{table_name}` LIMIT %s OFFSET %s", (limit, offset))
+        rows = [_jsonify_db_row(row) for row in cursor.fetchall()]
+        close_request_connection()
+        return json_response({"rows": rows, "limit": limit, "offset": offset})
+    except Error as exc:
+        close_request_connection()
+        return json_response(status=500, message=f"Database error: {exc}")
+
+
+@app.post("/api/admin/tables/<string:table_name>/rows")
+@require_roles("Admin")
+def admin_insert_row(table_name):
+    connection = request.db_connection
+    if not _admin_table_exists(connection, table_name):
+        close_request_connection()
+        return json_response(status=404, message="Table not found")
+
+    payload = request.get_json(silent=True) or {}
+    row = payload.get("row", payload)
+    if not isinstance(row, dict) or not row:
+        close_request_connection()
+        return json_response(status=400, message="Row payload must be a non-empty object")
+
+    try:
+        columns_meta = _admin_table_columns(connection, table_name)
+        valid_columns = {col["column_name"] for col in columns_meta}
+        filtered = {k: v for k, v in row.items() if k in valid_columns}
+        if not filtered:
+            close_request_connection()
+            return json_response(status=400, message="No valid columns provided")
+
+        columns = list(filtered.keys())
+        values = [filtered[c] for c in columns]
+        col_sql = ", ".join([f"`{c}`" for c in columns])
+        ph_sql = ", ".join(["%s"] * len(columns))
+
+        cursor = connection.cursor()
+        cursor.execute(f"INSERT INTO `{table_name}` ({col_sql}) VALUES ({ph_sql})", values)
+
+        write_audit_log(
+            connection,
+            request.current_user["memberID"],
+            "INSERT",
+            table_name,
+            str(cursor.lastrowid or "composite"),
+            {"row": filtered},
+        )
+
+        connection.commit()
+        close_request_connection()
+        return json_response(status=201, message="Row inserted")
+    except Error as exc:
+        connection.rollback()
+        close_request_connection()
+        return json_response(status=500, message=f"Database error: {exc}")
+
+
+@app.put("/api/admin/tables/<string:table_name>/rows")
+@require_roles("Admin")
+def admin_update_row(table_name):
+    connection = request.db_connection
+    if not _admin_table_exists(connection, table_name):
+        close_request_connection()
+        return json_response(status=404, message="Table not found")
+
+    payload = request.get_json(silent=True) or {}
+    key = payload.get("key", {})
+    values = payload.get("values", {})
+    if not isinstance(key, dict) or not key:
+        close_request_connection()
+        return json_response(status=400, message="Key object is required")
+    if not isinstance(values, dict) or not values:
+        close_request_connection()
+        return json_response(status=400, message="Values object is required")
+
+    try:
+        columns_meta = _admin_table_columns(connection, table_name)
+        valid_columns = {col["column_name"] for col in columns_meta}
+        pk_columns = _admin_primary_keys(connection, table_name)
+
+        if pk_columns and not all(col in key for col in pk_columns):
+            close_request_connection()
+            return json_response(status=400, message=f"Primary key required: {', '.join(pk_columns)}")
+
+        key_filtered = {k: v for k, v in key.items() if k in valid_columns}
+        values_filtered = {k: v for k, v in values.items() if k in valid_columns and k not in key_filtered}
+
+        if not key_filtered:
+            close_request_connection()
+            return json_response(status=400, message="No valid key columns provided")
+        if not values_filtered:
+            close_request_connection()
+            return json_response(status=400, message="No valid update columns provided")
+
+        set_sql = ", ".join([f"`{k}` = %s" for k in values_filtered.keys()])
+        where_sql = " AND ".join([f"`{k}` = %s" for k in key_filtered.keys()])
+        params = list(values_filtered.values()) + list(key_filtered.values())
+
+        cursor = connection.cursor()
+        cursor.execute(f"UPDATE `{table_name}` SET {set_sql} WHERE {where_sql}", params)
+        if cursor.rowcount == 0:
+            connection.rollback()
+            close_request_connection()
+            return json_response(status=404, message="Row not found or unchanged")
+
+        write_audit_log(
+            connection,
+            request.current_user["memberID"],
+            "UPDATE",
+            table_name,
+            str(key_filtered),
+            {"key": key_filtered, "values": values_filtered},
+        )
+
+        connection.commit()
+        close_request_connection()
+        return json_response(message="Row updated")
+    except Error as exc:
+        connection.rollback()
+        close_request_connection()
+        return json_response(status=500, message=f"Database error: {exc}")
+
+
+@app.delete("/api/admin/tables/<string:table_name>/rows")
+@require_roles("Admin")
+def admin_delete_row(table_name):
+    connection = request.db_connection
+    if not _admin_table_exists(connection, table_name):
+        close_request_connection()
+        return json_response(status=404, message="Table not found")
+
+    payload = request.get_json(silent=True) or {}
+    key = payload.get("key", {})
+    if not isinstance(key, dict) or not key:
+        close_request_connection()
+        return json_response(status=400, message="Key object is required")
+
+    try:
+        columns_meta = _admin_table_columns(connection, table_name)
+        valid_columns = {col["column_name"] for col in columns_meta}
+        pk_columns = _admin_primary_keys(connection, table_name)
+        if pk_columns and not all(col in key for col in pk_columns):
+            close_request_connection()
+            return json_response(status=400, message=f"Primary key required: {', '.join(pk_columns)}")
+
+        key_filtered = {k: v for k, v in key.items() if k in valid_columns}
+        if not key_filtered:
+            close_request_connection()
+            return json_response(status=400, message="No valid key columns provided")
+
+        where_sql = " AND ".join([f"`{k}` = %s" for k in key_filtered.keys()])
+        params = list(key_filtered.values())
+
+        cursor = connection.cursor()
+        cursor.execute(f"DELETE FROM `{table_name}` WHERE {where_sql}", params)
+        if cursor.rowcount == 0:
+            connection.rollback()
+            close_request_connection()
+            return json_response(status=404, message="Row not found")
+
+        write_audit_log(
+            connection,
+            request.current_user["memberID"],
+            "DELETE",
+            table_name,
+            str(key_filtered),
+            {"key": key_filtered},
+        )
+
+        connection.commit()
+        close_request_connection()
+        return json_response(message="Row deleted")
+    except Error as exc:
+        connection.rollback()
+        close_request_connection()
+        return json_response(status=500, message=f"Database error: {exc}")
+
+
 @app.delete("/api/admin/members/<int:member_id>")
 @require_roles("Admin")
 def delete_member(member_id):
@@ -3751,6 +4547,908 @@ def restore_member(member_id):
         connection.rollback()
         close_request_connection()
         return json_response(status=500, message=f"Database error: {exc}")
+
+
+# ============================================
+# ADMIN DASHBOARD ENDPOINTS (NEW)
+# ============================================
+
+@app.get("/api/admin/order/<int:order_id>")
+@require_roles("Admin")
+def admin_get_order(order_id):
+    connection = request.db_connection
+    try:
+        cursor = connection.cursor(dictionary=True)
+        cursor.execute("""
+            SELECT o.orderID, o.orderTime, o.orderStatus, o.totalAmount,
+                   o.customerID, o.restaurantID,
+                   m.name AS customerName, m.email AS customerEmail, m.phoneNumber AS customerPhone,
+                   r.name AS restaurantName, r.city AS restaurantCity,
+                   p.status AS paymentStatus, p.paymentType,
+                   da.PartnerID, dp_m.name AS partnerName,
+                   da.acceptanceTime, da.pickupTime, da.deliveryTime,
+                   COALESCE(da.PartnerID, 'unassigned') AS deliveryStatus
+            FROM Orders o
+            JOIN Member m ON m.memberID = o.customerID
+            JOIN Restaurant r ON r.restaurantID = o.restaurantID
+            LEFT JOIN Payment p ON p.paymentID = o.paymentID
+            LEFT JOIN Delivery_Assignments da ON da.OrderID = o.orderID
+            LEFT JOIN Member dp_m ON dp_m.memberID = da.PartnerID
+            WHERE o.orderID = %s
+            LIMIT 1
+        """, (order_id,))
+        order = cursor.fetchone()
+        
+        if not order:
+            close_request_connection()
+            return json_response(status=404, message="Order not found")
+        
+        # Get order items
+        cursor.execute("""
+            SELECT oi.itemID, mi.name, oi.quantity, oi.priceAtPurchase
+            FROM OrderItem oi
+            JOIN MenuItem mi ON mi.restaurantID = oi.restaurantID AND mi.itemID = oi.itemID
+            WHERE oi.orderID = %s
+            ORDER BY oi.itemID
+        """, (order_id,))
+        order['items'] = cursor.fetchall()
+        
+        close_request_connection()
+        return json_response(_jsonify_db_row(order))
+    except Error as exc:
+        close_request_connection()
+        return json_response(status=500, message=f"Database error: {exc}")
+
+
+@app.get("/api/admin/customers")
+@require_roles("Admin")
+def admin_list_customers():
+    connection = request.db_connection
+    try:
+        cursor = connection.cursor(dictionary=True)
+        cursor.execute("""
+            SELECT c.customerID, m.name, m.email, m.phoneNumber,
+                   c.loyaltyTier, c.membership, c.membershipDueDate,
+                   CASE WHEN c.isDeleted = 1 OR m.isDeleted = 1 THEN 1 ELSE 0 END AS isDeleted,
+                   COUNT(o.orderID) AS orderCount
+            FROM Customer c
+            JOIN Member m ON m.memberID = c.customerID
+            LEFT JOIN Orders o ON o.customerID = c.customerID
+            GROUP BY c.customerID
+            ORDER BY m.name
+            LIMIT 200
+        """)
+        customers = [_jsonify_db_row(row) for row in cursor.fetchall()]
+        close_request_connection()
+        return json_response(customers)
+    except Error as exc:
+        close_request_connection()
+        return json_response(status=500, message=f"Database error: {exc}")
+
+
+@app.get("/api/admin/customer/<int:customer_id>")
+@require_roles("Admin")
+def admin_get_customer(customer_id):
+    connection = request.db_connection
+    try:
+        cursor = connection.cursor(dictionary=True)
+        cursor.execute("""
+            SELECT c.customerID, m.name, m.email, m.phoneNumber, m.createdAt AS joinDate,
+                   c.loyaltyTier, c.membership, c.membershipDiscount, c.membershipDueDate, c.isDeleted
+            FROM Customer c
+            JOIN Member m ON m.memberID = c.customerID
+            WHERE c.customerID = %s
+            LIMIT 1
+        """, (customer_id,))
+        customer = cursor.fetchone()
+        
+        if not customer:
+            close_request_connection()
+            return json_response(status=404, message="Customer not found")
+        
+        # Get order stats
+        cursor.execute("""
+            SELECT COUNT(*) AS totalOrders, COALESCE(SUM(totalAmount), 0) AS totalSpent
+            FROM Orders
+            WHERE customerID = %s
+        """, (customer_id,))
+        stats = cursor.fetchone()
+        customer.update(stats)
+        
+        close_request_connection()
+        return json_response(_jsonify_db_row(customer))
+    except Error as exc:
+        close_request_connection()
+        return json_response(status=500, message=f"Database error: {exc}")
+
+
+@app.get("/api/admin/restaurants")
+@require_roles("Admin")
+def admin_list_restaurants():
+    connection = request.db_connection
+    try:
+        cursor = connection.cursor(dictionary=True)
+        cursor.execute("""
+            SELECT restaurantID, name, city, isOpen, isVerified, averageRating, isDeleted
+            FROM Restaurant
+            ORDER BY name
+            LIMIT 200
+        """)
+        restaurants = [_jsonify_db_row(row) for row in cursor.fetchall()]
+        close_request_connection()
+        return json_response(restaurants)
+    except Error as exc:
+        close_request_connection()
+        return json_response(status=500, message=f"Database error: {exc}")
+
+
+@app.get("/api/admin/restaurant/<int:restaurant_id>")
+@require_roles("Admin")
+def admin_get_restaurant(restaurant_id):
+    connection = request.db_connection
+    try:
+        cursor = connection.cursor(dictionary=True)
+        cursor.execute("""
+             SELECT restaurantID, name, email, contactPhone, city, zipCode, addressLine,
+                 latitude, longitude, discontinued,
+                 isOpen, isVerified, averageRating, isDeleted
+            FROM Restaurant
+            WHERE restaurantID = %s
+            LIMIT 1
+        """, (restaurant_id,))
+        restaurant = cursor.fetchone()
+        
+        if not restaurant:
+            close_request_connection()
+            return json_response(status=404, message="Restaurant not found")
+        
+        close_request_connection()
+        return json_response(_jsonify_db_row(restaurant))
+    except Error as exc:
+        close_request_connection()
+        return json_response(status=500, message=f"Database error: {exc}")
+
+
+@app.get("/api/admin/delivery-partners")
+@require_roles("Admin")
+def admin_list_delivery_partners():
+    connection = request.db_connection
+    try:
+        cursor = connection.cursor(dictionary=True)
+        cursor.execute("""
+            SELECT dp.partnerID, m.name, m.phoneNumber, dp.isOnline, dp.averageRating,
+                   CASE WHEN dp.isDeleted = 1 OR m.isDeleted = 1 THEN 1 ELSE 0 END AS isDeleted,
+                   COUNT(da.AssignmentID) AS totalDeliveries
+            FROM DeliveryPartner dp
+            JOIN Member m ON m.memberID = dp.partnerID
+            LEFT JOIN Delivery_Assignments da ON da.PartnerID = dp.partnerID
+            GROUP BY dp.partnerID
+            ORDER BY m.name
+            LIMIT 200
+        """)
+        partners = [_jsonify_db_row(row) for row in cursor.fetchall()]
+        close_request_connection()
+        return json_response(partners)
+    except Error as exc:
+        close_request_connection()
+        return json_response(status=500, message=f"Database error: {exc}")
+
+
+@app.get("/api/admin/delivery-partner/<int:partner_id>")
+@require_roles("Admin")
+def admin_get_delivery_partner(partner_id):
+    connection = request.db_connection
+    try:
+        cursor = connection.cursor(dictionary=True)
+        cursor.execute("""
+            SELECT dp.partnerID, m.name, m.email, m.phoneNumber,
+                 dp.vehicleNumber, dp.licenseID, dp.dateOfBirth,
+                 dp.currentLatitude, dp.currentLongitude,
+                 dp.isOnline, dp.averageRating, dp.isDeleted,
+                   COUNT(da.AssignmentID) AS totalDeliveries
+            FROM DeliveryPartner dp
+            JOIN Member m ON m.memberID = dp.partnerID
+            LEFT JOIN Delivery_Assignments da ON da.PartnerID = dp.partnerID
+            WHERE dp.partnerID = %s
+            GROUP BY dp.partnerID
+            LIMIT 1
+        """, (partner_id,))
+        partner = cursor.fetchone()
+        
+        if not partner:
+            close_request_connection()
+            return json_response(status=404, message="Delivery partner not found")
+        
+        close_request_connection()
+        return json_response(_jsonify_db_row(partner))
+    except Error as exc:
+        close_request_connection()
+        return json_response(status=500, message=f"Database error: {exc}")
+
+
+@app.put("/api/admin/customer/<int:customer_id>")
+@require_roles("Admin")
+def admin_update_customer(customer_id):
+    connection = request.db_connection
+    payload = request.get_json(silent=True) or {}
+
+    member_updates = []
+    member_values = []
+    customer_updates = []
+    customer_values = []
+
+    try:
+        cursor = connection.cursor(dictionary=True)
+        cursor.execute(
+            """
+            SELECT c.customerID, m.memberID, m.email
+            FROM Customer c
+            JOIN Member m ON m.memberID = c.customerID
+            WHERE c.customerID = %s
+            LIMIT 1
+            """,
+            (customer_id,),
+        )
+        existing = cursor.fetchone()
+        if not existing:
+            close_request_connection()
+            return json_response(status=404, message="Customer not found")
+
+        if "name" in payload:
+            member_updates.append("name = %s")
+            member_values.append(str(payload.get("name", "")).strip())
+
+        if "email" in payload:
+            new_email = str(payload.get("email", "")).strip()
+            if not new_email:
+                close_request_connection()
+                return json_response(status=400, message="email cannot be empty")
+            cursor.execute(
+                "SELECT COUNT(*) AS c FROM Member WHERE email = %s AND memberID <> %s",
+                (new_email, customer_id),
+            )
+            if int(cursor.fetchone()["c"]) > 0:
+                close_request_connection()
+                return json_response(status=409, message="Email already in use")
+            member_updates.append("email = %s")
+            member_values.append(new_email)
+
+        if "phoneNumber" in payload:
+            member_updates.append("phoneNumber = %s")
+            member_values.append(str(payload.get("phoneNumber", "")).strip())
+
+        if "password" in payload:
+            raw_password = str(payload.get("password", ""))
+            if raw_password:
+                member_updates.append("password = %s")
+                member_values.append(hash_password(raw_password))
+
+        if "loyaltyTier" in payload:
+            customer_updates.append("loyaltyTier = %s")
+            customer_values.append(int(payload.get("loyaltyTier")))
+
+        if "membership" in payload:
+            customer_updates.append("membership = %s")
+            customer_values.append(int(bool(payload.get("membership"))))
+
+        if "membershipDiscount" in payload:
+            customer_updates.append("membershipDiscount = %s")
+            customer_values.append(float(payload.get("membershipDiscount")))
+
+        if "membershipDueDate" in payload:
+            due_raw = payload.get("membershipDueDate")
+            if due_raw in (None, ""):
+                customer_updates.append("membershipDueDate = NULL")
+            else:
+                customer_updates.append("membershipDueDate = %s")
+                customer_values.append(str(due_raw))
+
+        if not member_updates and not customer_updates:
+            close_request_connection()
+            return json_response(status=400, message="No fields provided for update")
+
+        cursor_exec = connection.cursor()
+        if member_updates:
+            member_values.append(customer_id)
+            cursor_exec.execute(
+                f"UPDATE Member SET {', '.join(member_updates)} WHERE memberID = %s",
+                tuple(member_values),
+            )
+
+        if customer_updates:
+            customer_values.append(customer_id)
+            cursor_exec.execute(
+                f"UPDATE Customer SET {', '.join(customer_updates)} WHERE customerID = %s",
+                tuple(customer_values),
+            )
+
+        audit_payload = dict(payload)
+        if "password" in audit_payload:
+            audit_payload["password"] = "***"
+        write_audit_log(connection, request.current_user["memberID"], "UPDATE", "Customer", customer_id, audit_payload)
+
+        connection.commit()
+        close_request_connection()
+        return json_response(message="Customer updated")
+    except (Error, ValueError, TypeError) as exc:
+        connection.rollback()
+        close_request_connection()
+        return json_response(status=500, message=f"Database error: {exc}")
+
+
+@app.put("/api/admin/restaurant/<int:restaurant_id>")
+@require_roles("Admin")
+def admin_update_restaurant(restaurant_id):
+    connection = request.db_connection
+    payload = request.get_json(silent=True) or {}
+
+    allowed_fields = {
+        "name": "name = %s",
+        "contactPhone": "contactPhone = %s",
+        "email": "email = %s",
+        "password": "password = %s",
+        "isOpen": "isOpen = %s",
+        "isVerified": "isVerified = %s",
+        "addressLine": "addressLine = %s",
+        "city": "city = %s",
+        "zipCode": "zipCode = %s",
+        "latitude": "latitude = %s",
+        "longitude": "longitude = %s",
+        "discontinued": "discontinued = %s",
+    }
+
+    try:
+        cursor = connection.cursor(dictionary=True)
+        cursor.execute("SELECT restaurantID, email FROM Restaurant WHERE restaurantID = %s LIMIT 1", (restaurant_id,))
+        existing = cursor.fetchone()
+        if not existing:
+            close_request_connection()
+            return json_response(status=404, message="Restaurant not found")
+
+        set_parts = []
+        values = []
+
+        for field, expr in allowed_fields.items():
+            if field not in payload:
+                continue
+            value = payload[field]
+            if field in {"isOpen", "isVerified", "discontinued"}:
+                value = int(bool(value))
+            if field == "password":
+                value = hash_password(str(value)) if str(value) else None
+                if value is None:
+                    continue
+            set_parts.append(expr)
+            values.append(value)
+
+        if not set_parts:
+            close_request_connection()
+            return json_response(status=400, message="No fields provided for update")
+
+        values.append(restaurant_id)
+        cursor_exec = connection.cursor()
+        cursor_exec.execute(f"UPDATE Restaurant SET {', '.join(set_parts)} WHERE restaurantID = %s", tuple(values))
+
+        if "email" in payload or "password" in payload:
+            member_updates = []
+            member_values = []
+            member_email = str(payload.get("email", "")).strip() if "email" in payload else None
+            if member_email is not None:
+                cursor.execute(
+                    "SELECT memberID FROM Member WHERE email = %s LIMIT 1",
+                    (existing["email"],),
+                )
+                member_row = cursor.fetchone()
+                if member_row:
+                    cursor.execute(
+                        "SELECT COUNT(*) AS c FROM Member WHERE email = %s AND memberID <> %s",
+                        (member_email, member_row["memberID"]),
+                    )
+                    if int(cursor.fetchone()["c"]) > 0:
+                        connection.rollback()
+                        close_request_connection()
+                        return json_response(status=409, message="Email already in use")
+                    member_updates.append("email = %s")
+                    member_values.append(member_email)
+
+                if "password" in payload and str(payload.get("password", "")):
+                    member_updates.append("password = %s")
+                    member_values.append(hash_password(str(payload.get("password"))))
+
+                if member_updates and member_row:
+                    member_values.append(member_row["memberID"])
+                    cursor_exec.execute(
+                        f"UPDATE Member SET {', '.join(member_updates)} WHERE memberID = %s",
+                        tuple(member_values),
+                    )
+
+        audit_payload = dict(payload)
+        if "password" in audit_payload:
+            audit_payload["password"] = "***"
+        write_audit_log(connection, request.current_user["memberID"], "UPDATE", "Restaurant", restaurant_id, audit_payload)
+
+        connection.commit()
+        close_request_connection()
+        return json_response(message="Restaurant updated")
+    except (Error, ValueError, TypeError) as exc:
+        connection.rollback()
+        close_request_connection()
+        return json_response(status=500, message=f"Database error: {exc}")
+
+
+@app.put("/api/admin/delivery-partner/<int:partner_id>")
+@require_roles("Admin")
+def admin_update_delivery_partner(partner_id):
+    connection = request.db_connection
+    payload = request.get_json(silent=True) or {}
+
+    member_updates = []
+    member_values = []
+    partner_updates = []
+    partner_values = []
+
+    try:
+        cursor = connection.cursor(dictionary=True)
+        cursor.execute(
+            """
+            SELECT dp.partnerID, m.memberID
+            FROM DeliveryPartner dp
+            JOIN Member m ON m.memberID = dp.partnerID
+            WHERE dp.partnerID = %s
+            LIMIT 1
+            """,
+            (partner_id,),
+        )
+        existing = cursor.fetchone()
+        if not existing:
+            close_request_connection()
+            return json_response(status=404, message="Delivery partner not found")
+
+        if "name" in payload:
+            member_updates.append("name = %s")
+            member_values.append(str(payload.get("name", "")).strip())
+        if "email" in payload:
+            new_email = str(payload.get("email", "")).strip()
+            if not new_email:
+                close_request_connection()
+                return json_response(status=400, message="email cannot be empty")
+            cursor.execute(
+                "SELECT COUNT(*) AS c FROM Member WHERE email = %s AND memberID <> %s",
+                (new_email, partner_id),
+            )
+            if int(cursor.fetchone()["c"]) > 0:
+                close_request_connection()
+                return json_response(status=409, message="Email already in use")
+            member_updates.append("email = %s")
+            member_values.append(new_email)
+        if "phoneNumber" in payload:
+            member_updates.append("phoneNumber = %s")
+            member_values.append(str(payload.get("phoneNumber", "")).strip())
+        if "password" in payload and str(payload.get("password", "")):
+            member_updates.append("password = %s")
+            member_values.append(hash_password(str(payload.get("password"))))
+
+        for field in ["vehicleNumber", "licenseID", "dateOfBirth", "currentLatitude", "currentLongitude"]:
+            if field in payload:
+                partner_updates.append(f"{field} = %s")
+                partner_values.append(payload[field])
+
+        if "isOnline" in payload:
+            partner_updates.append("isOnline = %s")
+            partner_values.append(int(bool(payload.get("isOnline"))))
+
+        if not member_updates and not partner_updates:
+            close_request_connection()
+            return json_response(status=400, message="No fields provided for update")
+
+        cursor_exec = connection.cursor()
+        if member_updates:
+            member_values.append(partner_id)
+            cursor_exec.execute(
+                f"UPDATE Member SET {', '.join(member_updates)} WHERE memberID = %s",
+                tuple(member_values),
+            )
+
+        if partner_updates:
+            partner_values.append(partner_id)
+            cursor_exec.execute(
+                f"UPDATE DeliveryPartner SET {', '.join(partner_updates)} WHERE partnerID = %s",
+                tuple(partner_values),
+            )
+
+        audit_payload = dict(payload)
+        if "password" in audit_payload:
+            audit_payload["password"] = "***"
+        write_audit_log(connection, request.current_user["memberID"], "UPDATE", "DeliveryPartner", partner_id, audit_payload)
+
+        connection.commit()
+        close_request_connection()
+        return json_response(message="Delivery partner updated")
+    except (Error, ValueError, TypeError) as exc:
+        connection.rollback()
+        close_request_connection()
+        return json_response(status=500, message=f"Database error: {exc}")
+
+
+@app.delete("/api/admin/customer/<int:customer_id>")
+@require_roles("Admin")
+def admin_delete_customer(customer_id):
+    connection = request.db_connection
+    try:
+        cursor = connection.cursor(dictionary=True)
+        cursor.execute(
+            """
+            SELECT c.customerID, c.isDeleted AS customerDeleted, m.isDeleted AS memberDeleted
+            FROM Customer c
+            JOIN Member m ON m.memberID = c.customerID
+            WHERE c.customerID = %s
+            LIMIT 1
+            """,
+            (customer_id,),
+        )
+        row = cursor.fetchone()
+        if not row:
+            close_request_connection()
+            return json_response(status=404, message="Customer not found")
+
+        if int(row.get("customerDeleted", 0)) == 1 and int(row.get("memberDeleted", 0)) == 1:
+            close_request_connection()
+            return json_response(message="Customer already deleted")
+
+        cursor_exec = connection.cursor()
+        cursor_exec.execute("DELETE FROM Sessions WHERE memberID = %s", (customer_id,))
+        cursor_exec.execute("UPDATE Customer SET isDeleted = 1 WHERE customerID = %s", (customer_id,))
+        cursor_exec.execute("UPDATE Member SET isDeleted = 1 WHERE memberID = %s", (customer_id,))
+
+        write_audit_log(
+            connection,
+            request.current_user["memberID"],
+            "DELETE",
+            "Customer",
+            customer_id,
+            {"softDelete": True},
+        )
+
+        connection.commit()
+        close_request_connection()
+        return json_response(message="Customer deleted (soft delete)")
+    except Error as exc:
+        connection.rollback()
+        close_request_connection()
+        return json_response(status=500, message=f"Database error: {exc}")
+
+
+@app.post("/api/admin/customer/<int:customer_id>/restore")
+@require_roles("Admin")
+def admin_restore_customer(customer_id):
+    connection = request.db_connection
+    try:
+        cursor = connection.cursor(dictionary=True)
+        cursor.execute(
+            """
+            SELECT c.customerID, c.isDeleted AS customerDeleted, m.isDeleted AS memberDeleted
+            FROM Customer c
+            JOIN Member m ON m.memberID = c.customerID
+            WHERE c.customerID = %s
+            LIMIT 1
+            """,
+            (customer_id,),
+        )
+        row = cursor.fetchone()
+        if not row:
+            close_request_connection()
+            return json_response(status=404, message="Customer not found")
+
+        if int(row.get("customerDeleted", 0)) == 0 and int(row.get("memberDeleted", 0)) == 0:
+            close_request_connection()
+            return json_response(message="Customer is already active")
+
+        cursor_exec = connection.cursor()
+        cursor_exec.execute("UPDATE Customer SET isDeleted = 0 WHERE customerID = %s", (customer_id,))
+        cursor_exec.execute("UPDATE Member SET isDeleted = 0 WHERE memberID = %s", (customer_id,))
+
+        write_audit_log(
+            connection,
+            request.current_user["memberID"],
+            "UPDATE",
+            "Customer",
+            customer_id,
+            {"restored": True, "softDelete": False},
+        )
+
+        connection.commit()
+        close_request_connection()
+        return json_response(message="Customer restored successfully")
+    except Error as exc:
+        connection.rollback()
+        close_request_connection()
+        return json_response(status=500, message=f"Database error: {exc}")
+
+
+@app.delete("/api/admin/restaurant/<int:restaurant_id>")
+@require_roles("Admin")
+def admin_delete_restaurant(restaurant_id):
+    connection = request.db_connection
+    try:
+        cursor = connection.cursor(dictionary=True)
+        cursor.execute(
+            "SELECT restaurantID, email, isDeleted FROM Restaurant WHERE restaurantID = %s LIMIT 1",
+            (restaurant_id,),
+        )
+        row = cursor.fetchone()
+        if not row:
+            close_request_connection()
+            return json_response(status=404, message="Restaurant not found")
+
+        if int(row.get("isDeleted", 0)) == 1:
+            close_request_connection()
+            return json_response(message="Restaurant already deleted")
+
+        cursor_exec = connection.cursor()
+        cursor_exec.execute("UPDATE Restaurant SET isDeleted = 1, isOpen = 0 WHERE restaurantID = %s", (restaurant_id,))
+
+        member_id = None
+        cursor.execute("SELECT memberID FROM Member WHERE email = %s LIMIT 1", (row.get("email"),))
+        member_row = cursor.fetchone()
+        if member_row:
+            member_id = member_row["memberID"]
+            cursor_exec.execute("DELETE FROM Sessions WHERE memberID = %s", (member_id,))
+            cursor_exec.execute("UPDATE Member SET isDeleted = 1 WHERE memberID = %s", (member_id,))
+
+        write_audit_log(
+            connection,
+            request.current_user["memberID"],
+            "DELETE",
+            "Restaurant",
+            restaurant_id,
+            {"softDelete": True, "memberID": member_id},
+        )
+
+        connection.commit()
+        close_request_connection()
+        return json_response(message="Restaurant deleted (soft delete)")
+    except Error as exc:
+        connection.rollback()
+        close_request_connection()
+        return json_response(status=500, message=f"Database error: {exc}")
+
+
+@app.post("/api/admin/restaurant/<int:restaurant_id>/restore")
+@require_roles("Admin")
+def admin_restore_restaurant(restaurant_id):
+    connection = request.db_connection
+    try:
+        cursor = connection.cursor(dictionary=True)
+        cursor.execute(
+            "SELECT restaurantID, email, isDeleted FROM Restaurant WHERE restaurantID = %s LIMIT 1",
+            (restaurant_id,),
+        )
+        row = cursor.fetchone()
+        if not row:
+            close_request_connection()
+            return json_response(status=404, message="Restaurant not found")
+
+        if int(row.get("isDeleted", 0)) == 0:
+            close_request_connection()
+            return json_response(message="Restaurant is already active")
+
+        cursor_exec = connection.cursor()
+        cursor_exec.execute("UPDATE Restaurant SET isDeleted = 0 WHERE restaurantID = %s", (restaurant_id,))
+
+        member_id = None
+        cursor.execute("SELECT memberID FROM Member WHERE email = %s LIMIT 1", (row.get("email"),))
+        member_row = cursor.fetchone()
+        if member_row:
+            member_id = member_row["memberID"]
+            cursor_exec.execute("UPDATE Member SET isDeleted = 0 WHERE memberID = %s", (member_id,))
+
+        write_audit_log(
+            connection,
+            request.current_user["memberID"],
+            "UPDATE",
+            "Restaurant",
+            restaurant_id,
+            {"restored": True, "softDelete": False, "memberID": member_id},
+        )
+
+        connection.commit()
+        close_request_connection()
+        return json_response(message="Restaurant restored successfully")
+    except Error as exc:
+        connection.rollback()
+        close_request_connection()
+        return json_response(status=500, message=f"Database error: {exc}")
+
+
+@app.delete("/api/admin/delivery-partner/<int:partner_id>")
+@require_roles("Admin")
+def admin_delete_delivery_partner(partner_id):
+    connection = request.db_connection
+    try:
+        cursor = connection.cursor(dictionary=True)
+        cursor.execute(
+            """
+            SELECT dp.partnerID, dp.isDeleted AS partnerDeleted, m.isDeleted AS memberDeleted
+            FROM DeliveryPartner dp
+            JOIN Member m ON m.memberID = dp.partnerID
+            WHERE dp.partnerID = %s
+            LIMIT 1
+            """,
+            (partner_id,),
+        )
+        row = cursor.fetchone()
+        if not row:
+            close_request_connection()
+            return json_response(status=404, message="Delivery partner not found")
+
+        if int(row.get("partnerDeleted", 0)) == 1 and int(row.get("memberDeleted", 0)) == 1:
+            close_request_connection()
+            return json_response(message="Delivery partner already deleted")
+
+        cursor_exec = connection.cursor()
+        cursor_exec.execute("DELETE FROM Sessions WHERE memberID = %s", (partner_id,))
+        cursor_exec.execute("UPDATE DeliveryPartner SET isDeleted = 1, isOnline = 0 WHERE partnerID = %s", (partner_id,))
+        cursor_exec.execute("UPDATE Member SET isDeleted = 1 WHERE memberID = %s", (partner_id,))
+
+        write_audit_log(
+            connection,
+            request.current_user["memberID"],
+            "DELETE",
+            "DeliveryPartner",
+            partner_id,
+            {"softDelete": True},
+        )
+
+        connection.commit()
+        close_request_connection()
+        return json_response(message="Delivery partner deleted (soft delete)")
+    except Error as exc:
+        connection.rollback()
+        close_request_connection()
+        return json_response(status=500, message=f"Database error: {exc}")
+
+
+@app.post("/api/admin/delivery-partner/<int:partner_id>/restore")
+@require_roles("Admin")
+def admin_restore_delivery_partner(partner_id):
+    connection = request.db_connection
+    try:
+        cursor = connection.cursor(dictionary=True)
+        cursor.execute(
+            """
+            SELECT dp.partnerID, dp.isDeleted AS partnerDeleted, m.isDeleted AS memberDeleted
+            FROM DeliveryPartner dp
+            JOIN Member m ON m.memberID = dp.partnerID
+            WHERE dp.partnerID = %s
+            LIMIT 1
+            """,
+            (partner_id,),
+        )
+        row = cursor.fetchone()
+        if not row:
+            close_request_connection()
+            return json_response(status=404, message="Delivery partner not found")
+
+        if int(row.get("partnerDeleted", 0)) == 0 and int(row.get("memberDeleted", 0)) == 0:
+            close_request_connection()
+            return json_response(message="Delivery partner is already active")
+
+        cursor_exec = connection.cursor()
+        cursor_exec.execute("UPDATE DeliveryPartner SET isDeleted = 0 WHERE partnerID = %s", (partner_id,))
+        cursor_exec.execute("UPDATE Member SET isDeleted = 0 WHERE memberID = %s", (partner_id,))
+
+        write_audit_log(
+            connection,
+            request.current_user["memberID"],
+            "UPDATE",
+            "DeliveryPartner",
+            partner_id,
+            {"restored": True, "softDelete": False},
+        )
+
+        connection.commit()
+        close_request_connection()
+        return json_response(message="Delivery partner restored successfully")
+    except Error as exc:
+        connection.rollback()
+        close_request_connection()
+        return json_response(status=500, message=f"Database error: {exc}")
+
+
+@app.get("/api/admin/audits")
+@require_roles("Admin")
+def admin_list_audits():
+    limit = request.args.get("limit", default=200, type=int)
+    limit = min(max(limit, 1), 1000)
+
+    entries = []
+    try:
+        connection = request.db_connection
+        sync_audit_file_from_db(connection)
+        cursor = connection.cursor(dictionary=True)
+        cursor.execute(
+            """
+            SELECT logID, memberID, action, tableName, recordID, timestamp, details
+            FROM AuditLog
+            ORDER BY timestamp DESC, logID DESC
+            LIMIT %s
+            """,
+            (limit,),
+        )
+
+        file_index_by_log_id = {}
+        if os.path.exists(LOG_FILE_PATH):
+            with open(LOG_FILE_PATH, "r", encoding="utf-8") as log_file:
+                for line in log_file:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        parsed = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    log_id = parsed.get("logID")
+                    if log_id is not None:
+                        file_index_by_log_id[str(log_id)] = parsed
+
+        for row in cursor.fetchall():
+            details_payload = {}
+            raw_details = row.get("details")
+            if isinstance(raw_details, str) and raw_details.strip():
+                try:
+                    details_payload = json.loads(raw_details)
+                except json.JSONDecodeError:
+                    details_payload = {"raw": raw_details}
+
+            message = details_payload.get("message") if isinstance(details_payload, dict) else None
+            if not message:
+                message = _default_audit_message(row.get("action"), row.get("tableName"), row.get("recordID"))
+
+            method = details_payload.get("method") if isinstance(details_payload, dict) else None
+            path = details_payload.get("path") if isinstance(details_payload, dict) else None
+            ip = details_payload.get("ip") if isinstance(details_payload, dict) else None
+
+            if (not method or not path) and row.get("logID") is not None:
+                from_file = file_index_by_log_id.get(str(row.get("logID")))
+                if from_file:
+                    method = method or from_file.get("method")
+                    path = path or from_file.get("path")
+                    ip = ip or from_file.get("ip")
+
+            entries.append(
+                {
+                    "logID": row.get("logID"),
+                    "timestamp": row.get("timestamp").isoformat() if row.get("timestamp") else None,
+                    "memberID": row.get("memberID"),
+                    "action": row.get("action"),
+                    "tableName": row.get("tableName"),
+                    "recordID": row.get("recordID"),
+                    "details": details_payload,
+                    "message": message,
+                    "path": path,
+                    "method": method,
+                    "ip": ip,
+                }
+            )
+
+        # Backward-compatible fallback for deployments where AuditLog is empty.
+        if not entries and os.path.exists(LOG_FILE_PATH):
+            with open(LOG_FILE_PATH, "r", encoding="utf-8") as log_file:
+                for line in log_file:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        entries.append(json.loads(line))
+                    except json.JSONDecodeError:
+                        entries.append({"raw": line})
+            entries = list(reversed(entries))[:limit]
+
+        close_request_connection()
+        return json_response(entries)
+    except (Error, OSError) as exc:
+        close_request_connection()
+        return json_response(status=500, message=f"Failed to read audit log: {exc}")
 
 
 if __name__ == "__main__":

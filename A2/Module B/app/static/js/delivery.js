@@ -11,10 +11,18 @@ const state = {
     activeTab: "live",
     positionWatchId: null,
     locationPushAt: 0,
+    lastKnownPartnerLocation: null,
+    lastRouteRefreshAt: 0,
+    lastRouteSource: null,
+    mapRenderInFlight: false,
+    mapRenderQueued: false,
 };
 
 let fulfillmentMap = null;
 let mapLayers = [];
+const routeCache = new Map();
+const ROUTE_REFRESH_INTERVAL_MS = 12000;
+const ROUTE_MIN_MOVE_METERS = 35;
 
 const selectors = {
     navButtons: document.querySelectorAll(".nav-tab-btn"),
@@ -93,7 +101,7 @@ function switchTab(tabName) {
     });
 
     if (tabName === "fulfillment") {
-        renderFulfillmentMap();
+        scheduleFulfillmentMapRefresh(true);
     }
 }
 
@@ -197,7 +205,7 @@ function renderFulfillment() {
 
     selectors.fulfillmentPaymentMode.textContent = `Mode: ${order.paymentType || "-"}`;
     selectors.fulfillmentPaymentStatus.textContent = `Status: ${order.paymentStatus || "-"}`;
-    const showCODCollect = order.paymentType === "COD" && order.paymentStatus !== "Success";
+    const showCODCollect = order.paymentType === "COD" && order.paymentStatus !== "Success" && order.orderStatus === "OutForDelivery";
     selectors.paymentCollectedBtn.classList.toggle("hidden", !showCODCollect);
     const isCODPendingCollection = order.paymentType === "COD" && order.paymentStatus !== "Success";
 
@@ -205,7 +213,7 @@ function renderFulfillment() {
     selectors.statusSaveBtn.disabled = order.orderStatus === "Delivered" || order.orderStatus !== "OutForDelivery" || isCODPendingCollection;
     selectors.statusSaveBtn.title = isCODPendingCollection ? "Collect COD payment before marking Delivered" : "";
 
-    renderFulfillmentMap();
+    scheduleFulfillmentMapRefresh(true);
 }
 
 function ensureMap() {
@@ -220,29 +228,228 @@ function ensureMap() {
     }).addTo(fulfillmentMap);
 }
 
-function renderFulfillmentMap() {
+async function fetchRoadRoute(points) {
+    if (!Array.isArray(points) || points.length < 2) {
+        return null;
+    }
+
+    const cacheKey = points
+        .map(([lat, lng]) => `${Number(lat).toFixed(5)},${Number(lng).toFixed(5)}`)
+        .join("|");
+
+    const cached = routeCache.get(cacheKey);
+    const now = Date.now();
+    if (cached && now - cached.at < 30000) {
+        return cached.route;
+    }
+
+    const coordinates = points
+        .map(([lat, lng]) => `${Number(lng)},${Number(lat)}`)
+        .join(";");
+
+    const url = `https://router.project-osrm.org/route/v1/driving/${coordinates}?overview=full&geometries=geojson`;
+    const response = await fetch(url);
+    if (!response.ok) {
+        return null;
+    }
+
+    const payload = await response.json();
+    if (!payload?.routes?.length || !payload.routes[0]?.geometry?.coordinates) {
+        return null;
+    }
+
+    const route = payload.routes[0].geometry.coordinates.map(([lng, lat]) => [lat, lng]);
+    routeCache.set(cacheKey, { at: now, route });
+    return route;
+}
+
+function distanceMeters(pointA, pointB) {
+    if (!pointA || !pointB) return Number.POSITIVE_INFINITY;
+    const toRad = (v) => (v * Math.PI) / 180;
+    const R = 6371000;
+    const dLat = toRad(pointB[0] - pointA[0]);
+    const dLng = toRad(pointB[1] - pointA[1]);
+    const lat1 = toRad(pointA[0]);
+    const lat2 = toRad(pointB[0]);
+    const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(a));
+}
+
+function buildRoutePlan() {
+    if (!state.activeOrder) {
+        return null;
+    }
+
+    const pickup = [Number(state.activeOrder.restaurantLatitude), Number(state.activeOrder.restaurantLongitude)];
+    const drop = [Number(state.activeOrder.customerLatitude), Number(state.activeOrder.customerLongitude)];
+
+    const partnerLat = Number(state.lastKnownPartnerLocation?.lat ?? state.partner?.currentLatitude);
+    const partnerLng = Number(state.lastKnownPartnerLocation?.lng ?? state.partner?.currentLongitude);
+    const hasPartnerPoint = Number.isFinite(partnerLat) && Number.isFinite(partnerLng);
+    const partner = hasPartnerPoint ? [partnerLat, partnerLng] : null;
+
+    const orderStatus = String(state.activeOrder.orderStatus || "");
+    const pickupDone = orderStatus === "OutForDelivery" || orderStatus === "Delivered";
+
+    if (!partner) {
+        return {
+            pickup,
+            drop,
+            partner: null,
+            routePoints: [pickup, drop],
+            stage: "pickup_to_drop",
+        };
+    }
+
+    if (pickupDone) {
+        return {
+            pickup,
+            drop,
+            partner,
+            routePoints: [partner, drop],
+            stage: "partner_to_drop",
+        };
+    }
+
+    return {
+        pickup,
+        drop,
+        partner,
+        routePoints: [partner, pickup, drop],
+        stage: "partner_pickup_drop",
+    };
+}
+
+function shouldRefreshRoute(routePlan) {
+    const now = Date.now();
+    if (!state.lastRouteSource) {
+        return true;
+    }
+
+    if (routePlan.stage !== state.lastRouteSource.stage) {
+        return true;
+    }
+
+    if (now - state.lastRouteRefreshAt >= ROUTE_REFRESH_INTERVAL_MS) {
+        return true;
+    }
+
+    if (!routePlan.partner || !state.lastRouteSource.partner) {
+        return false;
+    }
+
+    return distanceMeters(routePlan.partner, state.lastRouteSource.partner) >= ROUTE_MIN_MOVE_METERS;
+}
+
+function scheduleFulfillmentMapRefresh(force = false) {
+    if (!state.activeOrder || state.activeTab !== "fulfillment") {
+        return;
+    }
+
+    const routePlan = buildRoutePlan();
+    if (!routePlan) {
+        return;
+    }
+
+    if (!force && !shouldRefreshRoute(routePlan)) {
+        return;
+    }
+
+    renderFulfillmentMap(routePlan).catch(() => {
+        // Ignore route fetch failures; fallback rendering happens in renderer.
+    });
+}
+
+async function renderFulfillmentMap(routePlan = null) {
     if (!state.activeOrder) {
         return;
     }
+
+    if (state.mapRenderInFlight) {
+        state.mapRenderQueued = true;
+        return;
+    }
+
     ensureMap();
     if (!fulfillmentMap) {
         return;
     }
+
+    const plan = routePlan || buildRoutePlan();
+    if (!plan) {
+        return;
+    }
+
+    state.mapRenderInFlight = true;
 
     for (const layer of mapLayers) {
         fulfillmentMap.removeLayer(layer);
     }
     mapLayers = [];
 
-    const pickup = [Number(state.activeOrder.restaurantLatitude), Number(state.activeOrder.restaurantLongitude)];
-    const drop = [Number(state.activeOrder.customerLatitude), Number(state.activeOrder.customerLongitude)];
+    const pickupMarker = L.marker(plan.pickup).bindPopup("Pickup").addTo(fulfillmentMap);
+    const dropMarker = L.marker(plan.drop).bindPopup("Delivery").addTo(fulfillmentMap);
+    mapLayers.push(pickupMarker, dropMarker);
 
-    const pickupMarker = L.marker(pickup).bindPopup("Pickup").addTo(fulfillmentMap);
-    const dropMarker = L.marker(drop).bindPopup("Delivery").addTo(fulfillmentMap);
-    const routeLine = L.polyline([pickup, drop], { color: "#16a34a", weight: 5 }).addTo(fulfillmentMap);
+    if (plan.partner) {
+        const partnerMarker = L.circleMarker(plan.partner, {
+            radius: 7,
+            color: "#1d4ed8",
+            fillColor: "#3b82f6",
+            fillOpacity: 0.9,
+            weight: 2,
+        }).bindPopup("You").addTo(fulfillmentMap);
+        mapLayers.push(partnerMarker);
+    }
 
-    mapLayers.push(pickupMarker, dropMarker, routeLine);
-    fulfillmentMap.fitBounds(routeLine.getBounds(), { padding: [28, 28] });
+    let boundsLayer = null;
+
+    try {
+        const fullRoute = await fetchRoadRoute(plan.routePoints);
+        if (fullRoute && fullRoute.length > 1) {
+            const fullLine = L.polyline(fullRoute, {
+                color: "#16a34a",
+                weight: 6,
+                opacity: 0.95,
+            }).addTo(fulfillmentMap);
+            mapLayers.push(fullLine);
+            boundsLayer = fullLine;
+        } else {
+            const fallbackLine = L.polyline(plan.routePoints, {
+                color: "#16a34a",
+                weight: 5,
+                opacity: 0.75,
+                dashArray: "8 8",
+            }).addTo(fulfillmentMap);
+            mapLayers.push(fallbackLine);
+            boundsLayer = fallbackLine;
+        }
+    } catch {
+        const fallbackLine = L.polyline(plan.routePoints, {
+            color: "#16a34a",
+            weight: 5,
+            opacity: 0.75,
+            dashArray: "8 8",
+        }).addTo(fulfillmentMap);
+        mapLayers.push(fallbackLine);
+        boundsLayer = fallbackLine;
+    }
+
+    if (boundsLayer && typeof boundsLayer.getBounds === "function") {
+        fulfillmentMap.fitBounds(boundsLayer.getBounds(), { padding: [28, 28] });
+    }
+
+    state.lastRouteRefreshAt = Date.now();
+    state.lastRouteSource = {
+        stage: plan.stage,
+        partner: plan.partner,
+    };
+
+    state.mapRenderInFlight = false;
+    if (state.mapRenderQueued) {
+        state.mapRenderQueued = false;
+        scheduleFulfillmentMapRefresh(true);
+    }
 }
 
 function renderProfile() {
@@ -375,6 +582,11 @@ async function handlePaymentCollected() {
         return;
     }
 
+    if (state.activeOrder.orderStatus !== "OutForDelivery") {
+        showToast("You can collect COD only after restaurant marks order OutForDelivery", true);
+        return;
+    }
+
     try {
         await api(`/api/delivery/orders/${state.activeOrder.orderID}/payment-collected`, {
             method: "PUT",
@@ -480,8 +692,10 @@ function startLocationTracking() {
         (position) => {
             const lat = Number(position.coords.latitude);
             const lng = Number(position.coords.longitude);
+            state.lastKnownPartnerLocation = { lat, lng };
             selectors.heroMetricLocation.textContent = `Live Location: ${lat}, ${lng}`;
             pushLiveLocation(lat, lng);
+            scheduleFulfillmentMapRefresh(false);
         },
         (error) => {
             showToast(getLocationErrorMessage(error), true);

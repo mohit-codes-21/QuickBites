@@ -443,9 +443,10 @@ async function handleAddMenuItem(event) {
 async function handleUpdateMenuItem(event) {
     event.preventDefault();
     const formData = new FormData(event.target);
-    const itemID = Number(formData.get("itemID"));
+    const rawItemID = String(formData.get("itemID") || "").trim();
+    const itemID = Number(rawItemID);
 
-    if (!itemID) {
+    if (rawItemID === "" || Number.isNaN(itemID)) {
         showToast("itemID is required", true);
         return;
     }

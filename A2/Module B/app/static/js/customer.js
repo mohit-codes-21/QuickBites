@@ -8,6 +8,7 @@ const state = {
     profileReviews: { orderReviews: [], itemReviews: [] },
     addresses: [],
     cart: [],
+    cartSummary: null,
 };
 
 const pageName = document.body.dataset.page;
@@ -49,6 +50,9 @@ const selectors = {
     profileDeleteBtn: document.getElementById("profile-delete-btn"),
     cartItems: document.getElementById("cart-items"),
     cartItemCount: document.getElementById("cart-item-count"),
+    cartSubtotal: document.getElementById("cart-subtotal"),
+    cartDiscountPercent: document.getElementById("cart-discount-percent"),
+    cartDiscountAmount: document.getElementById("cart-discount-amount"),
     cartTotal: document.getElementById("cart-total"),
     clearCartBtn: document.getElementById("clear-cart-btn"),
     paymentDemoActions: document.getElementById("payment-demo-actions"),
@@ -59,6 +63,9 @@ const selectors = {
     cartSpecialInstruction: document.getElementById("cart-special-instruction"),
     searchChips: document.querySelectorAll("[data-search-chip]"),
 };
+
+const profileOrderMaps = new Map();
+let profileLiveOrdersPollTimer = null;
 
 function updatePaymentActionsVisibility() {
     const paymentMode = getSelectedPaymentMode();
@@ -141,7 +148,9 @@ function updateCartBadge() {
         selectors.cartItemCount.textContent = String(count);
     }
     if (selectors.cartTotal) {
-        const total = state.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+        const total = state.cartSummary && Number.isFinite(Number(state.cartSummary.totalAmount))
+            ? Number(state.cartSummary.totalAmount)
+            : state.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
         selectors.cartTotal.textContent = `Rs ${total.toFixed(2)}`;
     }
 }
@@ -188,9 +197,11 @@ function renderRestaurantCards(target, restaurants) {
             <div class="card-tags">
                 <span class="tag">ID ${restaurant.restaurantID}</span>
                 <span class="tag">Rating ${restaurant.averageRating || "-"}</span>
+                ${restaurant.distanceKm != null ? `<span class="tag">${Number(restaurant.distanceKm).toFixed(2)} km</span>` : ""}
+                ${restaurant.withinDeliveryRange === false ? `<span class="tag">Out of 30 km range</span>` : ""}
             </div>
             <div class="card-meta">
-                <span>${restaurant.isOpen ? "Ordering available" : "Check back later"}</span>
+                <span>${restaurant.withinDeliveryRange === false ? "Delivery unavailable for selected address" : (restaurant.isOpen ? "Ordering available" : "Check back later")}</span>
                 <a class="text-link" href="/customer/browse?restaurantID=${restaurant.restaurantID}">Browse menu</a>
             </div>
         </article>
@@ -200,6 +211,12 @@ function renderRestaurantCards(target, restaurants) {
 async function refreshCart() {
     const payload = await api("/api/customer/cart");
     state.cart = payload.data?.items || [];
+    state.cartSummary = {
+        subtotalAmount: Number(payload.data?.subtotalAmount || 0),
+        discountPercent: Number(payload.data?.discountPercent || 0),
+        discountAmount: Number(payload.data?.discountAmount || 0),
+        totalAmount: Number(payload.data?.totalAmount || 0),
+    };
     renderCart();
 }
 
@@ -242,7 +259,13 @@ function renderMenuCards(target, items) {
 
     target.innerHTML = items.map((item) => {
         const quantity = getCartItemQuantity(item.restaurantID, item.itemID);
-        const cartButtonHTML = quantity > 0
+        const isClosed = item.restaurantIsOpen === 0 || item.restaurantIsOpen === false;
+        const outOfRange = item.withinDeliveryRange === false;
+        const cartButtonHTML = isClosed
+            ? `<button type="button" disabled title="This restaurant is currently closed">Closed</button>`
+            : outOfRange
+            ? `<button type="button" disabled title="This restaurant is more than 30 km away from your selected address">Out of range</button>`
+            : quantity > 0
             ? `
             <div class="quantity-controls">
                 <button type="button" class="qty-btn" data-qty-action="decrease" data-cart-id="${item.restaurantID}:${item.itemID}">−</button>
@@ -260,6 +283,9 @@ function renderMenuCards(target, items) {
             <div class="card-tags">
                 <span class="tag">Item ${item.itemID}</span>
                 <span class="tag">${item.isAvailable ? "Available" : "Unavailable"}</span>
+                ${isClosed ? `<span class="tag">Closed</span>` : ""}
+                ${item.distanceKm != null ? `<span class="tag">${Number(item.distanceKm).toFixed(2)} km</span>` : ""}
+                ${outOfRange ? `<span class="tag">Out of 30 km range</span>` : ""}
             </div>
             <div class="price-row">
                 <strong>Rs ${Number(item.appPrice).toFixed(2)}</strong>
@@ -324,13 +350,33 @@ function renderProfileOrders() {
     if (!target) {
         return;
     }
+
+    const openOrderIds = new Set(
+        Array.from(target.querySelectorAll("details.expand-card[open][data-order-id]"))
+            .map((node) => String(node.dataset.orderId || ""))
+            .filter(Boolean)
+    );
+
     if (!state.profileOrders.length) {
+        cleanupProfileOrderMaps();
         renderEmptyState(target, "No previous orders yet.");
         return;
     }
 
+    cleanupProfileOrderMaps();
+
     target.innerHTML = state.profileOrders.map((order) => {
         const orderReviewExists = order.restaurantRating !== null || order.deliveryRating !== null || !!order.orderComment;
+        const hasLiveAssignment =
+            !!order.PartnerID
+            && order.orderStatus !== "Delivered"
+            && order.deliveryPartnerLatitude !== null
+            && order.deliveryPartnerLongitude !== null
+            && order.restaurantLatitude !== null
+            && order.restaurantLongitude !== null
+            && order.deliveryLatitude !== null
+            && order.deliveryLongitude !== null;
+        const keepExpanded = openOrderIds.has(String(order.orderID));
         const itemRows = (order.items || []).map((item) => {
             const hasItemReview = item.itemRating !== null || !!item.itemComment;
             return `
@@ -349,7 +395,7 @@ function renderProfileOrders() {
         }).join("");
 
         return `
-            <details class="expand-card">
+            <details class="expand-card" data-order-id="${order.orderID}" ${keepExpanded ? "open" : ""}>
                 <summary>
                     <span>Order #${order.orderID} · ${order.restaurantName}</span>
                     <span>${new Date(order.orderTime).toLocaleString()} · ${order.orderStatus}</span>
@@ -357,6 +403,25 @@ function renderProfileOrders() {
                 <div class="expand-body">
                     <p><strong>Total:</strong> Rs ${Number(order.totalAmount).toFixed(2)} · <strong>Payment:</strong> ${order.paymentStatus || "-"}</p>
                     ${order.PartnerID ? `<p><strong>Delivery Partner:</strong> ${order.deliveryPartnerName || "-"} (${order.deliveryPartnerPhone || "-"}) · <strong>Live Location:</strong> ${order.deliveryPartnerLatitude ?? "-"}, ${order.deliveryPartnerLongitude ?? "-"}</p>` : ""}
+                    ${hasLiveAssignment ? `
+                        <div class="profile-live-track-wrap">
+                            <p class="section-kicker">Live Delivery Tracking</p>
+                            <div
+                                class="profile-live-map"
+                                id="profile-live-map-${order.orderID}"
+                                data-live-order-map="1"
+                                data-order-id="${order.orderID}"
+                                data-partner-lat="${order.deliveryPartnerLatitude}"
+                                data-partner-lng="${order.deliveryPartnerLongitude}"
+                                data-restaurant-lat="${order.restaurantLatitude}"
+                                data-restaurant-lng="${order.restaurantLongitude}"
+                                data-delivery-lat="${order.deliveryLatitude}"
+                                data-delivery-lng="${order.deliveryLongitude}"
+                                data-restaurant-name="${(order.restaurantName || "Restaurant").replace(/\"/g, "&quot;")}"
+                                data-delivery-address="${((order.deliveryAddress || "Destination") + (order.deliveryCity ? `, ${order.deliveryCity}` : "")).replace(/\"/g, "&quot;")}"
+                            ></div>
+                        </div>
+                    ` : ""}
                     <div class="review-row">
                         <span><strong>Restaurant Rating:</strong> ${order.restaurantRating ?? "-"}</span>
                         <span><strong>Delivery Rating:</strong> ${order.deliveryRating ?? "-"}</span>
@@ -378,6 +443,70 @@ function renderProfileOrders() {
             </details>
         `;
     }).join("");
+
+    renderProfileOrderTrackingMaps();
+}
+
+function cleanupProfileOrderMaps() {
+    for (const map of profileOrderMaps.values()) {
+        map.remove();
+    }
+    profileOrderMaps.clear();
+}
+
+function renderProfileOrderTrackingMaps() {
+    if (typeof L === "undefined") {
+        return;
+    }
+
+    const nodes = document.querySelectorAll("[data-live-order-map='1']");
+    for (const node of nodes) {
+        const orderId = String(node.dataset.orderId || "");
+        if (!orderId || profileOrderMaps.has(orderId)) {
+            continue;
+        }
+
+        const partnerLat = Number(node.dataset.partnerLat);
+        const partnerLng = Number(node.dataset.partnerLng);
+        const restaurantLat = Number(node.dataset.restaurantLat);
+        const restaurantLng = Number(node.dataset.restaurantLng);
+        const deliveryLat = Number(node.dataset.deliveryLat);
+        const deliveryLng = Number(node.dataset.deliveryLng);
+
+        if (
+            !Number.isFinite(partnerLat) || !Number.isFinite(partnerLng)
+            || !Number.isFinite(restaurantLat) || !Number.isFinite(restaurantLng)
+            || !Number.isFinite(deliveryLat) || !Number.isFinite(deliveryLng)
+        ) {
+            continue;
+        }
+
+        const map = L.map(node).setView([partnerLat, partnerLng], 13);
+        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+            attribution: "&copy; OpenStreetMap contributors",
+            maxZoom: 19,
+        }).addTo(map);
+
+        const restaurantName = node.dataset.restaurantName || "Restaurant";
+        const deliveryAddress = node.dataset.deliveryAddress || "Destination";
+
+        L.marker([restaurantLat, restaurantLng]).addTo(map).bindPopup(`Pickup: ${restaurantName}`);
+        L.marker([deliveryLat, deliveryLng]).addTo(map).bindPopup(`Delivery: ${deliveryAddress}`);
+        L.marker([partnerLat, partnerLng]).addTo(map).bindPopup("Delivery partner (live)");
+
+        const guideLine = L.polyline(
+            [[restaurantLat, restaurantLng], [deliveryLat, deliveryLng]],
+            { color: "#64748b", dashArray: "6 6", weight: 3 }
+        ).addTo(map);
+
+        const liveLine = L.polyline(
+            [[partnerLat, partnerLng], [deliveryLat, deliveryLng]],
+            { color: "#db5b2c", weight: 4, opacity: 0.9 }
+        ).addTo(map);
+
+        map.fitBounds(L.featureGroup([guideLine, liveLine]).getBounds().pad(0.25));
+        profileOrderMaps.set(orderId, map);
+    }
 }
 
 function renderProfileReviews() {
@@ -448,6 +577,30 @@ async function loadProfileOrdersAndReviews() {
     renderProfileReviews();
 }
 
+async function loadProfileOrdersOnly() {
+    const payload = await api("/api/customer/profile/orders");
+    state.profileOrders = payload.data || [];
+    renderProfileOrders();
+}
+
+function startProfileLiveOrdersPolling() {
+    stopProfileLiveOrdersPolling();
+    profileLiveOrdersPollTimer = window.setInterval(async () => {
+        try {
+            await loadProfileOrdersOnly();
+        } catch {
+            // Keep polling even if a tick fails.
+        }
+    }, 15000);
+}
+
+function stopProfileLiveOrdersPolling() {
+    if (profileLiveOrdersPollTimer) {
+        window.clearInterval(profileLiveOrdersPollTimer);
+        profileLiveOrdersPollTimer = null;
+    }
+}
+
 function renderCart() {
     if (!selectors.cartItems) {
         updateCartBadge();
@@ -455,6 +608,15 @@ function renderCart() {
     }
     if (!state.cart.length) {
         renderEmptyState(selectors.cartItems, "Your cart is empty. Add items from Browse or Home.");
+        if (selectors.cartSubtotal) {
+            selectors.cartSubtotal.textContent = "Rs 0.00";
+        }
+        if (selectors.cartDiscountPercent) {
+            selectors.cartDiscountPercent.textContent = "(0%)";
+        }
+        if (selectors.cartDiscountAmount) {
+            selectors.cartDiscountAmount.textContent = "- Rs 0.00";
+        }
         updateCartBadge();
         return;
     }
@@ -474,6 +636,23 @@ function renderCart() {
             </div>
         </article>
     `).join("");
+
+    const summary = state.cartSummary || {
+        subtotalAmount: state.cart.reduce((sum, item) => sum + (Number(item.price) * Number(item.quantity)), 0),
+        discountPercent: 0,
+        discountAmount: 0,
+        totalAmount: state.cart.reduce((sum, item) => sum + (Number(item.price) * Number(item.quantity)), 0),
+    };
+
+    if (selectors.cartSubtotal) {
+        selectors.cartSubtotal.textContent = `Rs ${Number(summary.subtotalAmount || 0).toFixed(2)}`;
+    }
+    if (selectors.cartDiscountPercent) {
+        selectors.cartDiscountPercent.textContent = `(${Number(summary.discountPercent || 0).toFixed(0)}%)`;
+    }
+    if (selectors.cartDiscountAmount) {
+        selectors.cartDiscountAmount.textContent = `- Rs ${Number(summary.discountAmount || 0).toFixed(2)}`;
+    }
     updateCartBadge();
 }
 
@@ -1213,6 +1392,7 @@ async function bootstrap() {
             );
         } else if (pageName === "profile") {
             await loadProfile();
+            startProfileLiveOrdersPolling();
             setTimeout(() => {
                 initAddressMap();
                 const geolocationBtn = document.getElementById("use-geolocation-btn");
@@ -1244,3 +1424,8 @@ async function bootstrap() {
 }
 
 bootstrap();
+
+window.addEventListener("beforeunload", () => {
+    stopProfileLiveOrdersPolling();
+    cleanupProfileOrderMaps();
+});
