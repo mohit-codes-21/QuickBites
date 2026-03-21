@@ -1,14 +1,13 @@
-# database/db_manager.py
 from .table import Table
 
 class DatabaseManager:
     def __init__(self):
         self.tables = {}
 
-    def create_table(self, table_name, order=4):
+    def create_table(self, table_name, schema, order=4, search_key=None, index_type="bplustree"):
         """Creates a new table if it doesn't already exist."""
         if table_name not in self.tables:
-            self.tables[table_name] = Table(table_name, order)
+            self.tables[table_name] = Table(table_name, schema, order, search_key, index_type)
             return True
         return False
 

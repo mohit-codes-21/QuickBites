@@ -133,13 +133,8 @@ class BPlusTree:
         return deleted
 
     def _delete(self, node, key):
-        # Recursive helper for deletion. Handle leaf and internal nodes .
-        # Ensure all nodes maintain minimum keys after deletion.
-
         if node.leaf:
-            # OPTIMIZATION: Use bisect_left to instantly find the key
             pos = bisect.bisect_left(node.keys, key)
-
             if pos < len(node.keys) and node.keys[pos] == key:
                 node.keys.pop(pos)
                 node.values.pop(pos)
@@ -147,55 +142,57 @@ class BPlusTree:
             else:
                 return False
 
-        # Internal node: decide which child to descend into
-        # OPTIMIZATION: Use bisect_right to find the correct child branch
         idx = bisect.bisect_right(node.keys, key)
 
         # Recurse FIRST
         deleted = self._delete(node.children[idx], key)
+
+        if not deleted:
+            return False
+
         child = node.children[idx]
-        
+
         if child.leaf:
             min_keys = math.ceil((self.order - 1) / 2)
         else:
             min_keys = math.ceil(self.order / 2) - 1
 
-        if not deleted:
-            return False
-
-        # React AFTER: Fix the child if it underflowed during the recursive call
+        # React AFTER: Fix the child if it underflowed
+        merged = False
         if len(node.children[idx].keys) < min_keys:
-            self._fill_child(node, idx)
+            merged = self._fill_child(node, idx)
 
-        if child.leaf and idx > 0 and idx < len(node.children) and len(node.children[idx].keys) > 0:
+        # Only update separator key if no merge happened
+        # (after a merge, node.children[idx] may no longer exist or point to wrong node)
+        if not merged and child.leaf and idx > 0 and idx < len(node.children) and len(node.children[idx].keys) > 0:
             node.keys[idx - 1] = node.children[idx].keys[0]
 
         return True
 
-    def _fill_child(self, node, index):
 
+    def _fill_child(self, node, index):
         if node.children[index].leaf:
             min_keys = math.ceil((self.order - 1) / 2)
         else:
             min_keys = math.ceil(self.order / 2) - 1
 
-
         # Try borrow from previous sibling
         if index - 1 >= 0 and len(node.children[index - 1].keys) > min_keys:
             self._borrow_from_prev(node, index)
-            return
+            return False  # borrowed, no merge
 
         # Try borrow from next sibling
         if index + 1 < len(node.children) and len(node.children[index + 1].keys) > min_keys:
             self._borrow_from_next(node, index)
-            return
+            return False  # borrowed, no merge
 
         # Otherwise merge with a sibling
         if index - 1 >= 0:
-            self._merge(node, index-1)
+            self._merge(node, index - 1)
         else:
             self._merge(node, index)
-
+        
+        return True  # merged
     def _borrow_from_prev ( self , node , index ) :
         # Borrow a key from the left sibling to prevent underflow.
         left = node.children[index - 1]
