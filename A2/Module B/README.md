@@ -77,6 +77,58 @@ Optional session lifetime env variable:
 
 ---
 
+## 1.1) SubTask 4–5: Indexing + Benchmarking (Module B)
+
+This repo includes:
+
+- SQL indexes targeting the app's most frequent WHERE/JOIN/ORDER BY patterns: `sql/indexes.sql`
+- A reproducible benchmark runner that captures timings + `EXPLAIN` plans before vs after indexing: `app/benchmark_indexing.py`
+
+### Apply Indexes (SubTask 4)
+
+After importing `sql/SQL_Dump.sql`, apply the indexes:
+
+```sql
+USE QB;
+SOURCE path/to/Module B/sql/indexes.sql;
+```
+
+### Benchmark Before vs After (SubTask 5)
+
+From `Module B/app` (inside the same venv you use to run the app):
+
+```bash
+python3 benchmark_indexing.py --mode full
+```
+
+If you changed the seed credentials or want to benchmark different sample IDs, pass them explicitly (example):
+
+```bash
+python3 benchmark_indexing.py --mode full \
+	--customer-id 2 --restaurant-id 202 --partner-id 12 \
+	--admin-email aman.shah1@example.com --admin-password pwd1 \
+	--customer-email riya.patel2@example.com --customer-password pwd2 \
+	--partner-email driver1@example.com --partner-password drv1
+```
+
+This will:
+
+- Drop the optimisation indexes (if present)
+- Record query timings + API timings + `EXPLAIN` output (BEFORE)
+- Apply the optimisation indexes
+- Record the same metrics again (AFTER)
+
+It prints the path to a JSON report written under `Module B/logs/` (for example `logs/index_benchmark_YYYYMMDDTHHMMSSZ.json`).
+
+If you only want to apply or drop indexes:
+
+```bash
+python3 benchmark_indexing.py --mode apply
+python3 benchmark_indexing.py --mode drop
+```
+
+---
+
 ## 2) Python Environment Setup
 
 From `Module B`:
