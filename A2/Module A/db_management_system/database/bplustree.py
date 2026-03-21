@@ -360,32 +360,3 @@ class BPlusTree:
             # constraint="false" keeps the graph from pushing the linked leaf down a level
             dot.edge(str(id(node)), str(id(node.next)), style="dashed", constraint="false")
 
-if __name__ == "__main__":
-    # 1. Create the tree
-    tree = BPlusTree(order=4)
-    
-    # 2. Insert some data so the tree actually has structure to show
-    keys_to_insert = [
-        50, 25, 75, 10, 30, 60, 80, 5, 15, 27, 35, 55, 65, 
-        78, 90, 2, 8, 12, 18, 40, 45, 70, 85, 95, 100
-    ]
-    for key in keys_to_insert:
-        tree.insert(key, f"Value_{key}")
-
-    # 3. Call the visualization method we just wrote
-    # tree.delete(90)
-    # # tree.delete(95)
-    # tree.insert(13,1)
-    # tree.insert(16,1)
-    # tree.insert(14,1)
-    # tree.insert(9,1)
-
-
-    dot = tree.visualize_tree()
-
-    if dot:
-        # 4. Render and view
-        # This saves 'my_bplus_tree.pdf' in your folder and opens it immediately.
-        # You can change format='pdf' to format='png' if you prefer an image file.
-        print("Generating B+ Tree visualization...")
-        dot.render('my_bplus_tree', view=True, format='pdf')
