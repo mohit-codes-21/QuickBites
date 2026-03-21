@@ -77,58 +77,6 @@ Optional session lifetime env variable:
 
 ---
 
-## 1.1) SubTask 4–5: Indexing + Benchmarking (Module B)
-
-This repo includes:
-
-- SQL indexes targeting the app's most frequent WHERE/JOIN/ORDER BY patterns: `sql/indexes.sql`
-- A reproducible benchmark runner that captures timings + `EXPLAIN` plans before vs after indexing: `app/benchmark_indexing.py`
-
-### Apply Indexes (SubTask 4)
-
-After importing `sql/SQL_Dump.sql`, apply the indexes:
-
-```sql
-USE QB;
-SOURCE path/to/Module B/sql/indexes.sql;
-```
-
-### Benchmark Before vs After (SubTask 5)
-
-From `Module B/app` (inside the same venv you use to run the app):
-
-```bash
-python3 benchmark_indexing.py --mode full
-```
-
-If you changed the seed credentials or want to benchmark different sample IDs, pass them explicitly (example):
-
-```bash
-python3 benchmark_indexing.py --mode full \
-	--customer-id 2 --restaurant-id 202 --partner-id 12 \
-	--admin-email aman.shah1@example.com --admin-password pwd1 \
-	--customer-email riya.patel2@example.com --customer-password pwd2 \
-	--partner-email driver1@example.com --partner-password drv1
-```
-
-This will:
-
-- Drop the optimisation indexes (if present)
-- Record query timings + API timings + `EXPLAIN` output (BEFORE)
-- Apply the optimisation indexes
-- Record the same metrics again (AFTER)
-
-It prints the path to a JSON report written under `Module B/logs/` (for example `logs/index_benchmark_YYYYMMDDTHHMMSSZ.json`).
-
-If you only want to apply or drop indexes:
-
-```bash
-python3 benchmark_indexing.py --mode apply
-python3 benchmark_indexing.py --mode drop
-```
-
----
-
 ## 2) Python Environment Setup
 
 From `Module B`:
@@ -217,6 +165,58 @@ After login/signup, users are auto-redirected to their role portal.
 
 ---
 
+## Indexing + Benchmarking (SubTask 4-5)
+
+This repo includes:
+
+- SQL indexes targeting the app's most frequent WHERE/JOIN/ORDER BY patterns: `sql/indexes.sql`
+- A reproducible benchmark runner that captures timings + `EXPLAIN` plans before vs after indexing: `app/benchmark_indexing.py`
+
+### Apply Indexes (SubTask 4)
+
+After importing `sql/SQL_Dump.sql`, apply the indexes:
+
+```sql
+USE QB;
+SOURCE path/to/Module B/sql/indexes.sql;
+```
+
+### Benchmark Before vs After (SubTask 5)
+
+From `Module B/app` (inside the same venv you use to run the app):
+
+```bash
+python3 benchmark_indexing.py --mode full
+```
+
+If you changed the seed credentials or want to benchmark different sample IDs, pass them explicitly (example):
+
+```bash
+python3 benchmark_indexing.py --mode full \
+	--customer-id 2 --restaurant-id 202 --partner-id 12 \
+	--admin-email aman.shah1@example.com --admin-password pwd1 \
+	--customer-email riya.patel2@example.com --customer-password pwd2 \
+	--partner-email driver1@example.com --partner-password drv1
+```
+
+This will:
+
+- Drop the optimisation indexes (if present)
+- Record query timings + API timings + `EXPLAIN` output (BEFORE)
+- Apply the optimisation indexes
+- Record the same metrics again (AFTER)
+
+It prints the path to a JSON report written under `Module B/logs/` (for example `logs/index_benchmark_YYYYMMDDTHHMMSSZ.json`).
+
+If you only want to apply or drop indexes:
+
+```bash
+python3 benchmark_indexing.py --mode apply
+python3 benchmark_indexing.py --mode drop
+```
+
+---
+
 ## Features (Short Overview)
 
 ## Authentication & Sessions
@@ -229,10 +229,21 @@ After login/signup, users are auto-redirected to their role portal.
 
 - Browse restaurants and menu items
 - Search menu by item name and restaurant name
-- Add/manage cart items
+- Add/manage cart items with restaurant availability checks
 - Place orders with payment mode and special instructions
+- 30 km delivery radius enforcement from selected delivery address
+- Restaurant closed-state enforcement for cart and checkout
+- Loyalty tier progression for members on every 10 successful orders (max tier 5)
+- Loyalty tier discount applied to cart and checkout totals:
+	- Tier 1 (or non-member): 0%
+	- Tier 2: 5%
+	- Tier 3: 8%
+	- Tier 4: 11%
+	- Tier 5: 14%
+- Cart summary breakdown with subtotal, discount percent, discount amount, and payable total
 - Manage delivery addresses with map/geolocation
 - View order history and reviews
+- Live delivery tracking map in profile for active orders
 - Update/delete customer profile
 
 ## Restaurant Features
@@ -259,7 +270,9 @@ After login/signup, users are auto-redirected to their role portal.
 ## Admin / Management (Core APIs)
 
 - Member management APIs (create, soft delete, restore)
+- Customer/restaurant/delivery-partner soft delete + restore flows
 - Cross-role access controls via role mapping tables
+- Audits API backed by database logs with file fallback/sync behavior
 
 ---
 
@@ -269,6 +282,7 @@ Logs are written under `Module B/logs`:
 
 - `audit.log`: data mutation and audit events
 - `activity.log`: auth and activity events
+- `audit_sync_state.json`: tracks DB-to-file audit sync progress
 
 ---
 
