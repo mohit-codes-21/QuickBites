@@ -303,7 +303,6 @@ class BPlusTree:
 
         return result
 
-
     def visualize_tree(self):
         # Generate Graphviz representation of the B+ tree structure.
         try:
@@ -325,15 +324,13 @@ class BPlusTree:
         if node is None:
             return
 
-        # FIX: Build an HTML-like table string to draw the array boxes safely
         if len(node.keys) == 0:
             label = '<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0"><TR><TD>EMPTY</TD></TR></TABLE>>'
         else:
             # Create a table cell <TD> for each key
             tds = "".join(f"<TD>{k}</TD>" for k in node.keys)
             label = f'<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0"><TR>{tds}</TR></TABLE>>'
-            
-        # Add the node to the graph
+
         dot.node(str(id(node)), label)
 
         # Recurse for children
@@ -342,17 +339,15 @@ class BPlusTree:
                 self._add_nodes(dot, child)
 
     def _add_edges(self, dot, node):
-        # Add edges between nodes and dashed lines for leaf connections
+
         if node is None:
             return
 
-        # Add solid lines from parent to children
         if not node.leaf:
             for child in node.children:
                 dot.edge(str(id(node)), str(id(child)))
                 self._add_edges(dot, child)
 
-        # Add dashed lines for the linked list at the leaf level
         if node.leaf and node.next is not None:
             # constraint="false" keeps the graph from pushing the linked leaf down a level
             dot.edge(str(id(node)), str(id(node.next)), style="dashed", constraint="false")
