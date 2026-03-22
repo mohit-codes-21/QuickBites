@@ -1,3 +1,25 @@
+"""
+QuickBites Module B — SubTask 5: Before / After Index Benchmarking
+===================================================================
+
+Measures raw SQL query latency (via direct DB connection) and Flask API
+endpoint latency (via the test client) both *before* and *after* the
+composite indexes defined in ``sql/indexes.sql`` are applied.
+
+Usage examples
+--------------
+    # Full round-trip: drop → benchmark → apply → benchmark
+    python benchmark_indexing.py --mode full
+
+    # Only benchmark (indexes assumed already absent / present)
+    python benchmark_indexing.py --mode before
+    python benchmark_indexing.py --mode after
+
+    # Manage indexes manually
+    python benchmark_indexing.py --mode apply
+    python benchmark_indexing.py --mode drop
+"""
+
 import argparse
 import json
 import os
@@ -13,6 +35,10 @@ from app import app as flask_app  # noqa: E402
 from app import get_db_connection  # noqa: E402
 
 
+# ---------------------------------------------------------------------------
+# Index catalogue — must match sql/indexes.sql and sql/drop_indexes.sql
+# ---------------------------------------------------------------------------
+
 @dataclass(frozen=True)
 class IndexSpec:
     table: str
@@ -24,21 +50,27 @@ INDEX_SPECS = [
     IndexSpec("Orders", "qb_idx_orders_restaurant_time"),
     IndexSpec("Orders", "qb_idx_orders_status_time"),
     IndexSpec("Delivery_Assignments", "qb_idx_delivery_partner_acceptance"),
-    IndexSpec("Delivery_Assignments", "qb_idx_delivery_order"),
+    IndexSpec("Delivery_Assignments", "qb_idx_delivery_partner_deliverytime"),
     IndexSpec("MenuItem", "qb_idx_menuitem_rest_disc_item"),
     IndexSpec("Restaurant", "qb_idx_restaurant_active_name"),
     IndexSpec("Payment", "qb_idx_payment_customer_for_time"),
-    IndexSpec("Payment", "qb_idx_payment_for_status_time"),
+    IndexSpec("Payment", "qb_idx_payment_for_status_type_time"),
     IndexSpec("Address", "qb_idx_address_customer_saved"),
-    IndexSpec("MenuItemRating", "qb_idx_menuitemrating_order"),
+    IndexSpec("AuditLog", "qb_idx_auditlog_timestamp"),
 ]
 
 
+# ---------------------------------------------------------------------------
+# Benchmark queries — 17 representative SELECT statements taken from app.py
+# ---------------------------------------------------------------------------
+
 def build_benchmark_queries(customer_id: int, restaurant_id: int, partner_id: int):
     return {
+        # ── existing 9 ──────────────────────────────────────────────
         "restaurants_list": {
             "sql": """
-                SELECT restaurantID, name, city, isOpen, isVerified, averageRating
+                SELECT restaurantID, name, city, isOpen, isVerified, averageRating,
+                       latitude, longitude
                 FROM Restaurant
                 WHERE discontinued = 0 AND isDeleted = 0
                 ORDER BY name
@@ -75,7 +107,7 @@ def build_benchmark_queries(customer_id: int, restaurant_id: int, partner_id: in
             "sql": """
                 SELECT o.orderID, o.orderTime, o.estimatedTime, o.totalAmount, o.orderStatus,
                        o.customerID, o.addressID,
-                       p.status AS paymentStatus,
+                       p.status AS paymentStatus, p.paymentType AS paymentMode,
                        da.AssignmentID, da.PartnerID, da.acceptanceTime, da.pickupTime, da.deliveryTime
                 FROM Orders o
                 LEFT JOIN Payment p ON p.paymentID = o.paymentID
@@ -141,39 +173,175 @@ def build_benchmark_queries(customer_id: int, restaurant_id: int, partner_id: in
             """,
             "params": (customer_id,),
         },
-        "menu_item_rating_join_helper": {
+        "admin_overview_recent": {
             "sql": """
-                SELECT mir.orderID, mir.restaurantID, mir.itemID, mir.rating
-                FROM MenuItemRating mir
-                JOIN Orders o ON o.orderID = mir.orderID
-                WHERE o.customerID = %s
-                ORDER BY o.orderID DESC
-                LIMIT 50
+                SELECT o.orderID, o.orderStatus, o.totalAmount, o.orderTime,
+                       r.name AS restaurantName, p.paymentType, p.status AS paymentStatus
+                FROM Orders o
+                LEFT JOIN Restaurant r ON r.restaurantID = o.restaurantID
+                LEFT JOIN Payment p ON p.paymentID = o.paymentID
+                ORDER BY o.orderTime DESC
+                LIMIT 12
+            """,
+            "params": (),
+        },
+
+        # ── 8 new queries ──────────────────────────────────────────
+        "menu_items_search": {
+            "sql": """
+                SELECT mi.restaurantID, mi.itemID, mi.name, mi.description, mi.menuCategory,
+                       mi.restaurantPrice, mi.appPrice, mi.isVegetarian, mi.preparationTime,
+                       mi.isAvailable, mi.discontinued,
+                       r.name AS restaurantName
+                FROM MenuItem mi
+                JOIN Restaurant r ON r.restaurantID = mi.restaurantID
+                WHERE r.isDeleted = 0 AND mi.discontinued = 0 AND mi.name LIKE %s
+                ORDER BY mi.restaurantID, mi.itemID
+            """,
+            "params": ("%Paneer%",),
+        },
+        "customer_cart": {
+            "sql": """
+                SELECT ci.customerID, ci.restaurantID, ci.itemID, ci.quantity,
+                       mi.name AS itemName, mi.appPrice,
+                       r.name AS restaurantName
+                FROM CartItem ci
+                JOIN MenuItem mi ON mi.restaurantID = ci.restaurantID AND mi.itemID = ci.itemID
+                JOIN Restaurant r ON r.restaurantID = ci.restaurantID
+                WHERE ci.customerID = %s
+                  AND mi.discontinued = 0
+                  AND r.isDeleted = 0
+                ORDER BY ci.restaurantID, ci.itemID
             """,
             "params": (customer_id,),
+        },
+        "customer_profile_orders": {
+            "sql": """
+                SELECT o.orderID, o.orderTime, o.orderStatus, o.totalAmount,
+                       r.name AS restaurantName, p.status AS paymentStatus,
+                       r.addressLine AS restaurantAddress, r.city AS restaurantCity,
+                       r.latitude AS restaurantLatitude, r.longitude AS restaurantLongitude,
+                       a.addressLine AS deliveryAddress, a.city AS deliveryCity,
+                       a.latitude AS deliveryLatitude, a.longitude AS deliveryLongitude,
+                       orr.restaurantRating, orr.deliveryRating, orr.comment AS orderComment,
+                       da.PartnerID, dpm.name AS deliveryPartnerName,
+                       dpm.phoneNumber AS deliveryPartnerPhone,
+                       dp.currentLatitude AS deliveryPartnerLatitude,
+                       dp.currentLongitude AS deliveryPartnerLongitude
+                FROM Orders o
+                JOIN Restaurant r ON r.restaurantID = o.restaurantID
+                JOIN Address a ON a.customerID = o.customerID AND a.addressID = o.addressID
+                LEFT JOIN Payment p ON p.paymentID = o.paymentID
+                LEFT JOIN OrderRating orr ON orr.orderID = o.orderID
+                LEFT JOIN Delivery_Assignments da ON da.OrderID = o.orderID
+                LEFT JOIN DeliveryPartner dp ON dp.partnerID = da.PartnerID
+                LEFT JOIN Member dpm ON dpm.memberID = da.PartnerID
+                WHERE o.customerID = %s
+                ORDER BY o.orderTime DESC
+                LIMIT 100
+            """,
+            "params": (customer_id,),
+        },
+        "customer_order_reviews": {
+            "sql": """
+                SELECT orr.orderID, o.orderTime, r.name AS restaurantName,
+                       orr.restaurantRating, orr.deliveryRating, orr.comment
+                FROM OrderRating orr
+                JOIN Orders o ON o.orderID = orr.orderID
+                JOIN Restaurant r ON r.restaurantID = o.restaurantID
+                WHERE o.customerID = %s
+                ORDER BY o.orderTime DESC
+            """,
+            "params": (customer_id,),
+        },
+        "customer_item_reviews": {
+            "sql": """
+                SELECT mir.orderID, mir.restaurantID, mir.itemID, mir.rating, mir.comment,
+                       o.orderTime, r.name AS restaurantName, mi.name AS itemName
+                FROM MenuItemRating mir
+                JOIN Orders o ON o.orderID = mir.orderID
+                JOIN Restaurant r ON r.restaurantID = mir.restaurantID
+                JOIN MenuItem mi ON mi.restaurantID = mir.restaurantID AND mi.itemID = mir.itemID
+                WHERE o.customerID = %s
+                ORDER BY o.orderTime DESC, mir.orderID DESC, mir.itemID
+            """,
+            "params": (customer_id,),
+        },
+        "customer_addresses": {
+            "sql": """
+                SELECT addressID, addressLine, city, zipCode, label, latitude, longitude, isSaved
+                FROM Address
+                WHERE customerID = %s
+                ORDER BY addressID
+            """,
+            "params": (customer_id,),
+        },
+        # NOTE: The real expire_pending_order_payments() runs an UPDATE, but we
+        # benchmark a SELECT with the same WHERE clause to avoid mutating data.
+        # The WHERE clause is what determines index usage, so results are equivalent.
+        "expire_pending_payments": {
+            "sql": """
+                SELECT paymentID, customerID, transactionTime
+                FROM Payment
+                WHERE paymentFor = 'Order'
+                  AND status = 'Pending'
+                  AND paymentType = 'OnQuickBites'
+                  AND transactionTime <= (NOW() - INTERVAL 2 MINUTE)
+            """,
+            "params": (),
+        },
+        "delivery_completed_orders": {
+            "sql": """
+                SELECT da.AssignmentID, da.OrderID, da.acceptanceTime, da.pickupTime, da.deliveryTime,
+                       o.totalAmount, o.specialInstruction,
+                       r.name AS restaurantName,
+                       m.name AS customerName
+                FROM Delivery_Assignments da
+                JOIN Orders o ON o.orderID = da.OrderID
+                JOIN Restaurant r ON r.restaurantID = o.restaurantID
+                JOIN Member m ON m.memberID = o.customerID
+                WHERE da.PartnerID = %s AND o.orderStatus = 'Delivered'
+                ORDER BY da.deliveryTime DESC
+                LIMIT 100
+            """,
+            "params": (partner_id,),
+        },
+        "admin_audits": {
+            "sql": """
+                SELECT logID, memberID, action, tableName, recordID, timestamp, details
+                FROM AuditLog
+                ORDER BY timestamp DESC, logID DESC
+                LIMIT 200
+            """,
+            "params": (),
         },
     }
 
 
+# ---------------------------------------------------------------------------
+# API endpoint benchmarks — 12 representative GET endpoints
+# ---------------------------------------------------------------------------
+
 def build_api_benchmarks(customer_id: int, restaurant_id: int):
     return [
+        # ── existing 6 (paths verified against app.py) ─────────────
         {
             "name": "api_restaurants",
             "method": "GET",
             "path": "/api/restaurants",
-            "role": "Admin",
+            "role": "Customer",
         },
         {
             "name": "api_menu_items",
             "method": "GET",
             "path": f"/api/menu-items?restaurantID={restaurant_id}",
-            "role": "Admin",
+            "role": "Customer",
         },
         {
             "name": "api_customer_orders",
             "method": "GET",
-            "path": f"/api/customer/orders?memberID={customer_id}",
-            "role": "Admin",
+            "path": "/api/customer/orders",
+            "role": "Customer",
         },
         {
             "name": "api_restaurant_orders",
@@ -193,8 +361,56 @@ def build_api_benchmarks(customer_id: int, restaurant_id: int):
             "path": "/api/delivery/live-orders",
             "role": "DeliveryPartner",
         },
+
+        # ── 6 new endpoints ────────────────────────────────────────
+        {
+            "name": "api_menu_items_search",
+            "method": "GET",
+            "path": "/api/menu-items?search=Paneer",
+            "role": "Customer",
+        },
+        {
+            "name": "api_customer_cart",
+            "method": "GET",
+            "path": "/api/customer/cart",
+            "role": "Customer",
+        },
+        {
+            "name": "api_customer_profile_orders",
+            "method": "GET",
+            "path": "/api/customer/profile/orders",
+            "role": "Customer",
+        },
+        {
+            "name": "api_delivery_assignments",
+            "method": "GET",
+            "path": "/api/delivery/assignments",
+            "role": "DeliveryPartner",
+        },
+        {
+            "name": "api_delivery_completed_orders",
+            "method": "GET",
+            "path": "/api/delivery/completed-orders",
+            "role": "DeliveryPartner",
+        },
+        {
+            "name": "api_admin_overview",
+            "method": "GET",
+            "path": "/api/admin/overview",
+            "role": "Admin",
+        },
+        {
+            "name": "api_admin_audits",
+            "method": "GET",
+            "path": "/api/admin/audits",
+            "role": "Admin",
+        },
     ]
 
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
 def _now_iso():
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
@@ -208,12 +424,43 @@ def _safe_execute(cursor, statement, params=None):
         return False, {"errno": exc.errno, "sqlstate": exc.sqlstate, "msg": str(exc)}
 
 
+# ---------------------------------------------------------------------------
+# Index management
+# ---------------------------------------------------------------------------
+
+# When a composite index has an FK column as its leading column, MySQL may be
+# using it to enforce the FK constraint.  Dropping it directly fails with
+# errno 1553.  We work around this by creating temporary single-column FK
+# replacement indexes first, then dropping the composite ones.
+_FK_REPLACEMENTS = [
+    ("Orders",                "_tmp_fk_orders_restaurantid",  "restaurantID"),
+    ("Delivery_Assignments",  "_tmp_fk_da_partnerid",         "PartnerID"),
+    ("Payment",               "_tmp_fk_payment_customerid",   "customerID"),
+]
+
+
 def drop_indexes(connection):
     results = []
     cursor = connection.cursor()
+
+    # 1. Create temporary FK replacement indexes so MySQL lets us drop composites.
+    for table, tmp_name, col in _FK_REPLACEMENTS:
+        _safe_execute(cursor, f"CREATE INDEX {tmp_name} ON {table}({col})")
+
+    # 2. Drop our composite indexes.
     for spec in INDEX_SPECS:
         ok, err = _safe_execute(cursor, f"DROP INDEX {spec.name} ON {spec.table}")
         results.append({"table": spec.table, "index": spec.name, "dropped": ok, "error": err})
+
+    # 3. Also drop any old-named indexes from previous implementations.
+    old_indexes = [
+        ("Delivery_Assignments", "qb_idx_delivery_order"),
+        ("MenuItemRating",       "qb_idx_menuitemrating_order"),
+        ("Payment",              "qb_idx_payment_for_status_time"),
+    ]
+    for table, name in old_indexes:
+        _safe_execute(cursor, f"DROP INDEX {name} ON {table}")
+
     connection.commit()
     return results
 
@@ -242,9 +489,18 @@ def apply_indexes(connection):
     for stmt in statements:
         ok, err = _safe_execute(cursor, stmt)
         results.append({"statement": stmt, "applied": ok, "error": err})
+
+    # Clean up temporary FK replacement indexes (composite indexes now cover FKs).
+    for table, tmp_name, _ in _FK_REPLACEMENTS:
+        _safe_execute(cursor, f"DROP INDEX {tmp_name} ON {table}")
+
     connection.commit()
     return results
 
+
+# ---------------------------------------------------------------------------
+# SQL-level benchmarking
+# ---------------------------------------------------------------------------
 
 def explain_query(connection, sql, params):
     cursor = connection.cursor(dictionary=True)
@@ -279,6 +535,10 @@ def time_select_query(connection, sql, params, runs, warmup):
         },
     }
 
+
+# ---------------------------------------------------------------------------
+# API-level benchmarking
+# ---------------------------------------------------------------------------
 
 def _login(client, email, password, login_as):
     resp = client.post(
@@ -331,6 +591,10 @@ def time_api_endpoint(client, method, path, token, runs, warmup):
         },
     }
 
+
+# ---------------------------------------------------------------------------
+# Main benchmark runner
+# ---------------------------------------------------------------------------
 
 def run_benchmarks(runs, warmup, *, customer_id: int, restaurant_id: int, partner_id: int, creds: dict):
     connection = get_db_connection()
@@ -419,6 +683,10 @@ def run_benchmarks(runs, warmup, *, customer_id: int, restaurant_id: int, partne
         if connection and connection.is_connected():
             connection.close()
 
+
+# ---------------------------------------------------------------------------
+# CLI entry-point
+# ---------------------------------------------------------------------------
 
 def main():
     parser = argparse.ArgumentParser(
