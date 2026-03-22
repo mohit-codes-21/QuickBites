@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>QuickBites Control Panel</title>
+    <link rel="stylesheet" href="/static/css/styles.css" />
+</head>
+<body>
+    <div class="bg-orb bg-orb-a"></div>
+    <div class="bg-orb bg-orb-b"></div>
+
+    <header class="hero">
+        <h1>QuickBites</h1>
+        <p>Local delivery operations console with secure APIs and RBAC controls.</p>
+    </header>
+
+    <main class="layout">
+        <section id="auth-panel" class="card auth-card">
+            <h2>{% if admin_portal %}Admin Sign In{% else %}Sign In{% endif %}</h2>
+            <form id="login-form">
+                <label>Email</label>
+                <input type="email" id="email" placeholder="member email" required />
+                <label>Password</label>
+                <input type="password" id="password" placeholder="password" required />
+                {% if admin_portal %}
+                <input type="hidden" id="login-as-fixed" value="Admin" />
+                {% else %}
+                <label>Login As</label>
+                <select id="login-as" required>
+                    <option value="" selected disabled>Select portal</option>
+                    <option value="Customer">Customer</option>
+                    <option value="RestaurantManager">Restaurant</option>
+                    <option value="DeliveryPartner">Delivery Partner</option>
+                </select>
+                {% endif %}
+                <button type="submit">Login</button>
+                {% if not admin_portal %}
+                <a href="/signup" class="auth-link-btn btn-secondary">Sign Up</a>
+                {% endif %}
+            </form>
+            {% if admin_portal %}
+            <p class="hint">Restricted portal. Only users with Admin role can sign in here.</p>
+            {% else %}
+            <p class="hint">Tip: Existing plaintext passwords in seed data are auto-migrated to bcrypt on successful login.</p>
+            {% endif %}
+        </section>
+
+        <section id="app-panel" class="hidden">
+            <div class="card topbar">
+                <div>
+                    <h2 id="welcome-line">Welcome</h2>
+                    <p id="role-line"></p>
+                </div>
+                <div class="topbar-actions">
+                    <button id="refresh-btn" class="btn-secondary">Refresh</button>
+                    <button id="logout-btn" class="btn-danger">Logout</button>
+                </div>
+            </div>
+
+            <div class="stats-grid">
+                <article class="card stat">
+                    <p>Authenticated Member ID</p>
+                    <h3 id="stat-member-id">-</h3>
+                </article>
+                <article class="card stat">
+                    <p>Session Expires</p>
+                    <h3 id="stat-expiry">-</h3>
+                </article>
+                <article class="card stat">
+                    <p>Menu Items Loaded</p>
+                    <h3 id="stat-menu-count">0</h3>
+                </article>
+            </div>
+
+            <div class="tabs">
+                <button class="tab active" data-tab="portfolio">Portfolio</button>
+                <button class="tab" data-tab="customer">Customer Hub</button>
+                <button class="tab" data-tab="delivery">Delivery Hub</button>
+                <button class="tab" data-tab="restaurant">Restaurant Hub</button>
+                <button class="tab" data-tab="menu">Menu Catalog</button>
+                <button class="tab" data-tab="admin">Admin Console</button>
+            </div>
+
+            <section id="tab-portfolio" class="card tab-content active">
+                <div class="row">
+                    <h3>Member Portfolio</h3>
+                    <div class="row-inline">
+                        <input type="number" id="portfolio-member-id" placeholder="memberID" />
+                        <button id="load-portfolio-btn">Load Portfolio</button>
+                    </div>
+                </div>
+                <pre id="portfolio-output" class="output"></pre>
+            </section>
+
+            <section id="tab-menu" class="card tab-content">
+                <div class="row wrap">
+                    <h3>Menu Items</h3>
+                    <div class="row-inline wrap">
+                        <input type="number" id="filter-restaurant-id" placeholder="restaurantID" />
+                        <input type="text" id="filter-menu-search" placeholder="search item name" />
+                        <button id="filter-menu-btn">Search</button>
+                    </div>
+                </div>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Restaurant</th>
+                                <th>Item ID</th>
+                                <th>Name</th>
+                                <th>Category</th>
+                                <th>App Price</th>
+                                <th>Available</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="menu-table-body"></tbody>
+                    </table>
+                </div>
+
+                <div id="menu-create-panel" class="subpanel hidden">
+                    <h4>Create Menu Item (Admin/RestaurantManager)</h4>
+                    <form id="menu-create-form" class="grid-form">
+                        <input type="number" name="restaurantID" placeholder="restaurantID" required />
+                        <input type="number" name="itemID" placeholder="itemID" required />
+                        <input type="text" name="name" placeholder="name" required />
+                        <input type="text" name="menuCategory" placeholder="category" />
+                        <input type="number" step="0.01" name="restaurantPrice" placeholder="restaurantPrice" required />
+                        <input type="number" step="0.01" name="appPrice" placeholder="appPrice" required />
+                        <input type="number" name="preparationTime" placeholder="preparationTime" required />
+                        <label class="check"><input type="checkbox" name="isVegetarian" /> Vegetarian</label>
+                        <label class="check"><input type="checkbox" name="isAvailable" checked /> Available</label>
+                        <button type="submit">Create Item</button>
+                    </form>
+                </div>
+            </section>
+
+            <section id="tab-customer" class="card tab-content">
+                <div class="row wrap">
+                    <h3>Customer Orders</h3>
+                    <div class="row-inline wrap">
+                        <button id="refresh-customer-orders-btn">Refresh Orders</button>
+                    </div>
+                </div>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Order ID</th>
+                                <th>Order Time</th>
+                                <th>Status</th>
+                                <th>Restaurant</th>
+                                <th>Total</th>
+                                <th>Payment</th>
+                            </tr>
+                        </thead>
+                        <tbody id="customer-orders-body"></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section id="tab-delivery" class="card tab-content">
+                <div class="row wrap">
+                    <h3>Assigned Deliveries</h3>
+                    <div class="row-inline wrap">
+                        <button id="refresh-delivery-btn">Refresh Assignments</button>
+                    </div>
+                </div>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Assignment ID</th>
+                                <th>Order ID</th>
+                                <th>Restaurant</th>
+                                <th>Order Status</th>
+                                <th>Accepted</th>
+                                <th>Pickup</th>
+                                <th>Delivered</th>
+                            </tr>
+                        </thead>
+                        <tbody id="delivery-assignments-body"></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section id="tab-restaurant" class="card tab-content">
+                <div class="row wrap">
+                    <h3>Restaurant Overview</h3>
+                    <div class="row-inline wrap">
+                        <button id="refresh-restaurants-btn">Refresh Restaurants</button>
+                    </div>
+                </div>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Restaurant ID</th>
+                                <th>Name</th>
+                                <th>City</th>
+                                <th>Open</th>
+                                <th>Verified</th>
+                                <th>Rating</th>
+                            </tr>
+                        </thead>
+                        <tbody id="restaurants-table-body"></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section id="tab-admin" class="card tab-content">
+                <h3>Admin Actions</h3>
+                <div id="admin-block" class="hidden">
+                    <p class="hint">Create/delete members while preserving core-table integrity.</p>
+
+                    <form id="create-member-form" class="grid-form">
+                        <input type="text" name="name" placeholder="name" required />
+                        <input type="email" name="email" placeholder="email" required />
+                        <input type="text" name="phoneNumber" placeholder="phoneNumber" required />
+                        <input type="password" name="password" placeholder="password" required />
+                        <select name="roleID" required>
+                            <option value="">Select role</option>
+                            <option value="1">Admin</option>
+                            <option value="2">Customer</option>
+                            <option value="3">DeliveryPartner</option>
+                            <option value="4">RestaurantManager</option>
+                        </select>
+                        <select name="profileType">
+                            <option value="">No project profile</option>
+                            <option value="Customer">Create customer row</option>
+                            <option value="DeliveryPartner">Create delivery partner row</option>
+                        </select>
+                        <button type="submit">Create Member</button>
+                    </form>
+
+                    <form id="delete-member-form" class="row-inline">
+                        <input type="number" name="memberID" placeholder="memberID to delete" required />
+                        <button type="submit" class="btn-danger">Delete Member</button>
+                    </form>
+
+                    <form id="restore-member-form" class="row-inline">
+                        <input type="number" name="memberID" placeholder="memberID to restore" required />
+                        <button type="submit" class="btn-secondary">Restore Member</button>
+                    </form>
+                </div>
+                <p id="admin-no-access" class="hint hidden">You are not an Admin. This section is read-only.</p>
+            </section>
+        </section>
+    </main>
+
+    <div id="toast" class="toast hidden"></div>
+    <script src="/static/js/app.js"></script>
+</body>
+</html>

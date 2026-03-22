@@ -9,7 +9,8 @@ CREATE TABLE Member (
     email VARCHAR(100) NOT NULL UNIQUE,
     password VARCHAR(100) NOT NULL,
     phoneNumber CHAR(10) NOT NULL,
-    createdAt DATETIME NOT NULL
+    createdAt DATETIME NOT NULL,
+    isDeleted BOOLEAN NOT NULL DEFAULT 0
 );
 
 -- ================= CUSTOMER =================
@@ -20,6 +21,7 @@ CREATE TABLE Customer (
     cartTotalAmount DECIMAL(10,2) NOT NULL CHECK (cartTotalAmount >= 0),
     membershipDueDate DATETIME,
     membership BOOLEAN NOT NULL,
+    isDeleted BOOLEAN NOT NULL DEFAULT 0,
     FOREIGN KEY (customerID) REFERENCES Member(memberID) on delete restrict on update cascade
 );
 
@@ -34,6 +36,7 @@ CREATE TABLE DeliveryPartner (
     isOnline BOOLEAN NOT NULL,
     averageRating FLOAT CHECK (averageRating BETWEEN 1 AND 5),
     image BLOB NOT NULL,
+    isDeleted BOOLEAN NOT NULL DEFAULT 0,
     FOREIGN KEY (partnerID) REFERENCES Member(memberID) on delete restrict on update cascade
 );
 
@@ -42,6 +45,8 @@ CREATE TABLE Restaurant (
     restaurantID INT PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
     contactPhone CHAR(10) NOT NULL,
+    email VARCHAR(100) NOT NULL UNIQUE,
+    password VARCHAR(100) NOT NULL,
     isOpen BOOLEAN NOT NULL,
     isVerified BOOLEAN NOT NULL,
     averageRating FLOAT CHECK (averageRating BETWEEN 1 AND 5),
@@ -50,7 +55,8 @@ CREATE TABLE Restaurant (
     zipCode CHAR(6) NOT NULL,
     latitude DOUBLE NOT NULL,
     longitude DOUBLE NOT NULL,
-    discontinued BOOLEAN NOT NULL
+    discontinued BOOLEAN NOT NULL,
+    isDeleted BOOLEAN NOT NULL DEFAULT 0
 );
 
 -- ================= MENU ITEM =================
@@ -161,8 +167,8 @@ CREATE TABLE Delivery_Assignments (
 -- ================= ORDER RATING =================
 CREATE TABLE OrderRating (
     orderID INT PRIMARY KEY,
-    restaurantRating INT CHECK (restaurantRating BETWEEN 1 AND 5),
-    deliveryRating INT CHECK (deliveryRating BETWEEN 1 AND 5),
+    restaurantRating INT CHECK (restaurantRating BETWEEN 1 AND 5) NOT NULL,
+    deliveryRating INT CHECK (deliveryRating BETWEEN 1 AND 5) NOT NULL,
     comment VARCHAR(1000),
     FOREIGN KEY (orderID) REFERENCES Orders(orderID) on delete restrict on update cascade
 );
@@ -182,37 +188,26 @@ CREATE TABLE MenuItemRating (
 -- ================= CORE SYSTEM TABLES =================
 
 -- Defines roles
-CREATE TABLE Groups (
-    groupID   INT PRIMARY KEY,
-    groupName VARCHAR(50) NOT NULL UNIQUE,  -- 'Admin', 'Customer', 'DeliveryPartner', 'RestaurantManager'
+CREATE TABLE Roles (
+    roleID   INT PRIMARY KEY,
+    roleName VARCHAR(50) NOT NULL UNIQUE,  -- 'Admin', 'Customer', 'DeliveryPartner', 'RestaurantManager'
     description VARCHAR(200)
 );
 
-INSERT INTO Groups VALUES
+INSERT INTO Roles VALUES
 (1,'Admin','Full system access'),
 (2,'Customer','Place and track orders'), 
 (3,'DeliveryPartner','Accept and deliver orders'),
 (4,'RestaurantManager','Manage restaurant and menu');
 
 -- Maps members to roles (many-to-many)
-CREATE TABLE MemberGroupMapping (
+CREATE TABLE MemberRoleMapping (
     memberID INT NOT NULL,
-    groupID  INT NOT NULL,
-    PRIMARY KEY (memberID, groupID),
+    roleID  INT NOT NULL,
+    PRIMARY KEY (memberID, roleID),
     FOREIGN KEY (memberID) REFERENCES Member(memberID) ON DELETE CASCADE ON UPDATE CASCADE,
-    FOREIGN KEY (groupID)  REFERENCES Groups(groupID)  ON DELETE CASCADE ON UPDATE CASCADE
+    FOREIGN KEY (roleID)  REFERENCES Roles(roleID)  ON DELETE CASCADE ON UPDATE CASCADE
 );
-
--- MemberGroupMapping (assign roles to members)
-INSERT INTO MemberGroupMapping(memberID, groupID) VALUES
--- Customers (memberIDs 1-10) → groupID 2
-(1,2),(2,2),(3,2),(4,2),(5,2),(6,2),(7,2),(8,2),(9,2),(10,2),
--- Delivery Partners (memberIDs 11-20) → groupID 3
-(11,3),(12,3),(13,3),(14,3),(15,3),(16,3),(17,3),(18,3),(19,3),(20,3),
--- Extra members (21-30) → groupID 2 (customers by default)
-(21,2),(22,2),(23,2),(24,2),(25,2),(26,2),(27,2),(28,2),(29,2),(30,2),
--- Make memberID 1 also an Admin (dual role)
-(1,1);
 
 -- Stores active sessions for logged-in members
 CREATE TABLE Sessions (
@@ -269,6 +264,17 @@ INSERT INTO Member(memberID, name, email, password, phoneNumber, createdAt) VALU
 (29,'Extra Nine','extra9@example.com','pwd29','9876500029','2025-09-09 09:00:00'),
 (30,'Extra Ten','extra10@example.com','pwd30','9876500030','2025-09-10 09:00:00');
 
+-- MemberRoleMapping (assign roles to members)
+INSERT INTO `MemberRoleMapping`(memberID, roleID) VALUES
+-- Customers (memberIDs 1-10) → roleID 2
+(2,2),(3,2),(4,2),(5,2),(6,2),(7,2),(8,2),(9,2),(10,2),
+-- Delivery Partners (memberIDs 11-20) → roleID 3
+(11,3),(12,3),(13,3),(14,3),(15,3),(16,3),(17,3),(18,3),(19,3),(20,3),
+-- Extra members (21-30) → roleID 2 (customers by default)
+(21,2),(22,2),(23,2),(24,2),(25,2),(26,2),(27,2),(28,2),(29,2),(30,2),
+-- Make memberID 1 also an Admin (dual role)
+(1,1);
+
 -- Customers 
 INSERT INTO Customer(customerID, loyaltyTier, membershipDiscount, cartTotalAmount, membershipDueDate, membership) VALUES
 (1,3,10.0,250.00,'2026-07-01 00:00:00',1),
@@ -296,17 +302,17 @@ INSERT INTO DeliveryPartner(partnerID, vehicleNumber, licenseID, dateOfBirth, cu
 (20,'MH12AB1243','LICDRV20','1990-02-20',11.0168,76.9558,1,4.7,x'00');
 
 -- Restaurants 
-INSERT INTO Restaurant(restaurantID, name, contactPhone, isOpen, isVerified, averageRating, addressLine, city, zipCode, latitude, longitude, discontinued) VALUES
-(201,'Spice Garden','9900000001',1,1,4.5,'MG Road 12','Ahmedabad','380001',23.025,72.540,0),
-(202,'The Curry Bowl','9900000002',1,1,4.2,'Vastrapur Plaza','Ahmedabad','380015',23.030,72.520,0),
-(203,'Urban Pizza','9900000003',1,1,4.0,'Paldi Street 5','Ahmedabad','380007',23.027,72.530,0),
-(204,'Green Leaf','9900000004',0,1,4.3,'CBD Area 8','Ahmedabad','380009',23.021,72.543,0),
-(205,'Sweet Treats','9900000005',1,0,3.9,'Satellite Road','Ahmedabad','380054',23.034,72.550,0),
-(206,'Tiffin House','9900000006',1,1,4.1,'Navrangpura','Ahmedabad','380009',23.026,72.541,0),
-(207,'Seafood Shack','9900000007',0,1,4.4,'Beach Road','Surat','395003',21.170,72.831,0),
-(208,'Grill King','9900000008',1,1,4.6,'Ring Road','Vadodara','390001',22.307,73.181,0),
-(209,'Fusion Café','9900000009',1,1,4.0,'Ellis Bridge','Ahmedabad','380006',23.028,72.538,0),
-(210,'Budget Bites','9900000010',1,1,3.8,'College Street','Ahmedabad','380014',23.024,72.535,0);
+INSERT INTO Restaurant(restaurantID, name, contactPhone, email, password, isOpen, isVerified, averageRating, addressLine, city, zipCode, latitude, longitude, discontinued) VALUES
+(201,'Spice Garden','9900000001','restaurant201@quickbites.local','rest201',1,1,4.5,'MG Road 12','Ahmedabad','380001',23.025,72.540,0),
+(202,'The Curry Bowl','9900000002','restaurant202@quickbites.local','rest202',1,1,4.2,'Vastrapur Plaza','Ahmedabad','380015',23.030,72.520,0),
+(203,'Urban Pizza','9900000003','restaurant203@quickbites.local','rest203',1,1,4.0,'Paldi Street 5','Ahmedabad','380007',23.027,72.530,0),
+(204,'Green Leaf','9900000004','restaurant204@quickbites.local','rest204',0,1,4.3,'CBD Area 8','Ahmedabad','380009',23.021,72.543,0),
+(205,'Sweet Treats','9900000005','restaurant205@quickbites.local','rest205',1,0,3.9,'Satellite Road','Ahmedabad','380054',23.034,72.550,0),
+(206,'Tiffin House','9900000006','restaurant206@quickbites.local','rest206',1,1,4.1,'Navrangpura','Ahmedabad','380009',23.026,72.541,0),
+(207,'Seafood Shack','9900000007','restaurant207@quickbites.local','rest207',0,1,4.4,'Beach Road','Surat','395003',21.170,72.831,0),
+(208,'Grill King','9900000008','restaurant208@quickbites.local','rest208',1,1,4.6,'Ring Road','Vadodara','390001',22.307,73.181,0),
+(209,'Fusion Café','9900000009','restaurant209@quickbites.local','rest209',1,1,4.0,'Ellis Bridge','Ahmedabad','380006',23.028,72.538,0),
+(210,'Budget Bites','9900000010','restaurant210@quickbites.local','rest210',1,1,3.8,'College Street','Ahmedabad','380014',23.024,72.535,0);
 
 -- MenuItem 
 INSERT INTO MenuItem(restaurantID,itemID,name,description,menuCategory,restaurantPrice,appPrice,isVegetarian,averageRating,preparationTime,isAvailable,discontinued) VALUES
@@ -478,5 +484,3 @@ INSERT INTO MenuItemRating(restaurantID, itemID, orderID, rating, comment) VALUE
 (205,2,5005,4,'Icecream good'),
 (206,2,5004,4,'Second comment on sambar'),
 (210,1,5009,4,'Thali main was fine');
-
-

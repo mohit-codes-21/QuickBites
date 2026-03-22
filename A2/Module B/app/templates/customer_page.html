@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>QuickBites | {{ page_title }}</title>
+    <link rel="stylesheet" href="/static/css/styles.css" />
+    <link rel="stylesheet" href="/static/css/customer.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+</head>
+<body class="customer-body" data-page="{{ page_name }}">
+    <header class="customer-nav-shell">
+        <nav class="customer-nav">
+            <a href="/customer" class="brand-mark">
+                <span class="brand-kicker">Delivered Warm</span>
+                <strong >QuickBites</strong>
+            </a>
+            <div class="customer-nav-links">
+                <a href="/customer">Home</a>
+                <a href="/customer/restaurants">Restaurants</a>
+                <a href="/customer/browse">Browse</a>
+                <a href="/customer/cart">Cart <span id="nav-cart-count" class="pill">0</span></a>
+                <a href="/customer/profile">Profile</a>
+            </div>
+            <div class="customer-nav-actions">
+                <span id="customer-user-chip" class="user-chip">Guest</span>
+                <button id="customer-logout-btn" class="btn-danger" type="button">Logout</button>
+            </div>
+        </nav>
+    </header>
+
+    <main class="customer-page">
+        <section class="customer-hero{% if page_name != 'home' %} compact{% endif %}">
+            <div class="hero-copy">
+                <p class="eyebrow">Comfort food, fast checkout, local favorites</p>
+                <h1>
+                    {% if page_name == 'home' %}
+                    What are you craving tonight?
+                    {% elif page_name == 'profile' %}
+                    Your QuickBites profile
+                    {% elif page_name == 'restaurants' %}
+                    Explore nearby restaurants
+                    {% elif page_name == 'browse' %}
+                    Search dishes and restaurants
+                    {% else %}
+                    Review your cart before checkout
+                    {% endif %}
+                </h1>
+                <p class="hero-subtext">
+                    {% if page_name == 'home' %}
+                    Browse kitchens, discover signature dishes, and jump back into your cart without leaving the customer experience.
+                    {% elif page_name == 'profile' %}
+                    Keep your member details, customer perks, and loyalty information in one place.
+                    {% elif page_name == 'restaurants' %}
+                    Compare open restaurants, ratings, and cities before you start your order.
+                    {% elif page_name == 'browse' %}
+                    Filter the live menu catalog by dish name or restaurant and add picks to your cart.
+                    {% else %}
+                    Your cart is saved per customer in the database so each account has a separate cart.
+                    {% endif %}
+                </p>
+                {% if page_name == 'home' %}
+                <form id="hero-search-form" class="hero-search-bar">
+                    <select id="hero-search-type">
+                        <option value="restaurants">Restaurant</option>
+                        <option value="menu">Food Item</option>
+                    </select>
+                    <input type="text" id="hero-search-input" placeholder="Search restaurants or dishes" />
+                    <button type="submit">Search</button>
+                </form>
+                <div class="hero-pills">
+                    <button class="pill-action" data-search-chip="Pizza" type="button">Pizza</button>
+                    <button class="pill-action" data-search-chip="Biryani" type="button">Biryani</button>
+                    <button class="pill-action" data-search-chip="Dessert" type="button">Desserts</button>
+                    <button class="pill-action" data-search-chip="Ahmedabad" type="button">Ahmedabad</button>
+                </div>
+                {% endif %}
+            </div>
+            <div class="hero-visual" aria-hidden="true">
+                <div class="hero-card hero-card-main">
+                    <span>30 min</span>
+                    <strong>Hot meals, calm UI</strong>
+                </div>
+                <div class="hero-card hero-card-side">
+                    <span>4.8 Avg</span>
+                    <strong>Handpicked local kitchens</strong>
+                </div>
+                <div class="plate-glow"></div>
+                <div class="plate-ring"></div>
+                <div class="plate-core"></div>
+                <div class="food-orb food-orb-a"></div>
+                <div class="food-orb food-orb-b"></div>
+                <div class="food-orb food-orb-c"></div>
+            </div>
+        </section>
+
+        <section id="customer-home-section" class="customer-section{% if page_name != 'home' %} hidden{% endif %}">
+            <div class="section-heading">
+                <div>
+                    <p class="section-kicker">Curated for you</p>
+                    <h2>Featured restaurants</h2>
+                </div>
+                <a href="/customer/restaurants" class="text-link">See all restaurants</a>
+            </div>
+            <div id="featured-restaurants" class="restaurant-grid"></div>
+
+            <div class="section-heading spaced-top">
+                <div>
+                    <p class="section-kicker">Popular picks</p>
+                    <h2>Trending dishes</h2>
+                </div>
+                <a href="/customer/browse" class="text-link">Browse full menu</a>
+            </div>
+            <div id="featured-menu-items" class="menu-grid"></div>
+        </section>
+
+        <section id="customer-restaurants-section" class="customer-section{% if page_name != 'restaurants' %} hidden{% endif %}">
+            <div class="section-heading">
+                <div>
+                    <p class="section-kicker">Restaurant directory</p>
+                    <h2>Browse restaurants</h2>
+                </div>
+                <div class="section-actions">
+                    <input id="restaurant-filter-input" type="text" placeholder="Filter by name or city" />
+                    <button id="refresh-restaurants-page" type="button" class="btn-secondary">Refresh</button>
+                </div>
+            </div>
+            <div id="restaurants-page-grid" class="restaurant-grid wide"></div>
+        </section>
+
+        <section id="customer-browse-section" class="customer-section{% if page_name != 'browse' %} hidden{% endif %}">
+            <div class="section-heading">
+                <div>
+                    <p class="section-kicker">Live catalog</p>
+                    <h2>Search menu items</h2>
+                </div>
+                <form id="browse-form" class="section-actions">
+                    <input id="browse-search-input" type="text" placeholder="Search by food item" />
+                    <input id="browse-restaurant-input" type="text" placeholder="Restaurant name (optional)" />
+                    <button type="submit">Search</button>
+                </form>
+            </div>
+            <div id="browse-results" class="menu-grid wide"></div>
+        </section>
+
+        <section id="customer-profile-section" class="customer-section{% if page_name != 'profile' %} hidden{% endif %}">
+            <div class="section-heading">
+                <div>
+                    <p class="section-kicker">Member identity</p>
+                    <h2>Profile overview</h2>
+                </div>
+            </div>
+            <div class="profile-layout">
+                <article class="profile-card">
+                    <h3>Member Details</h3>
+                    <dl id="profile-member-details" class="profile-list"></dl>
+                </article>
+                <article class="profile-card">
+                    <h3>Customer Benefits</h3>
+                    <dl id="profile-customer-details" class="profile-list"></dl>
+                </article>
+            </div>
+
+            <div class="profile-history-grid">
+                <article class="profile-card">
+                    <h3>Previous Orders</h3>
+                    <div id="profile-orders-list"></div>
+                </article>
+                <article class="profile-card">
+                    <h3>Your Reviews</h3>
+                    <div id="profile-reviews-list"></div>
+                </article>
+            </div>
+
+            <div class="profile-history-grid">
+                <article class="profile-card">
+                    <h3>Delivery Addresses</h3>
+                    <p>Select one delivery address for checkout.</p>
+                    <div id="profile-addresses-list"></div>
+                </article>
+                <article class="profile-card">
+                    <h3>Add Address</h3>
+                    <form id="address-create-form" class="grid-form">
+                        <input type="text" id="address-line" placeholder="Address line" required />
+                        <input type="text" id="address-city" placeholder="City" required />
+                        <input type="text" id="address-zip" placeholder="Zip code" required />
+                        <input type="text" id="address-label" placeholder="Label (Home/Work)" />
+                        <div class="address-map-container">
+                            <div id="address-map" style="width: 100%; height: 400px; border: 1px solid #e0e0e0; border-radius: 4px; background-color: #f5f5f5;">
+                                <div style="display: flex; align-items: center; justify-content: center; height: 100%; color: #999; flex-direction: column;">
+                                    <p>Map loading... or click "Use Geolocation" below</p>
+                                </div>
+                            </div>
+                            <div class="map-controls">
+                                <button type="button" id="use-geolocation-btn" class="btn-secondary">Use My Location</button>
+                                <button type="button" id="clear-map-btn" class="btn-secondary">Clear Map</button>
+                            </div>
+                        </div>
+                        <div class="coordinate-inputs">
+                            <label>Latitude: <input type="number" id="address-latitude" placeholder="0.0000" step="0.0001" /></label>
+                            <label>Longitude: <input type="number" id="address-longitude" placeholder="0.0000" step="0.0001" /></label>
+                            <small>Click on the map or enter coordinates manually</small>
+                        </div>
+                        <div class="profile-edit-actions">
+                            <button type="submit">Add Address</button>
+                        </div>
+                    </form>
+                </article>
+            </div>
+
+            <div class="profile-actions">
+                <article class="profile-card">
+                    <h3>Membership Status</h3>
+                    <div id="membership-section" class="membership-info">
+                        <p id="membership-status-text">Not a member yet</p>
+                        <button id="purchase-membership-btn" type="button" class="btn-primary">Purchase Membership (Rs 500/Year)</button>
+                        <div id="membership-form" class="hidden">
+                            <p>Membership payment via Online (QuickBites)</p>
+                            <input type="hidden" name="membership-payment-mode" value="online" />
+                            <div class="membership-actions">
+                                <button type="button" id="confirm-membership-btn" class="btn-primary">Confirm Purchase</button>
+                                <button type="button" id="cancel-membership-btn" class="btn-secondary">Cancel</button>
+                            </div>
+                        </div>
+                    </div>
+                </article>
+
+                <article class="profile-card">
+                    <h3>Update Profile</h3>
+                    <button id="profile-edit-toggle-btn" type="button">Update Profile</button>
+                    <form id="profile-update-form" class="grid-form hidden">
+                        <input type="text" id="profile-update-name" placeholder="Name" />
+                        <input type="email" id="profile-update-email" placeholder="Email" />
+                        <input type="text" id="profile-update-phone" placeholder="Phone number" maxlength="10" />
+                        <input type="password" id="profile-update-password" placeholder="New password (optional)" />
+                        <div class="profile-edit-actions">
+                            <button type="submit">Save</button>
+                            <button id="profile-edit-cancel-btn" type="button" class="btn-secondary">Cancel</button>
+                        </div>
+                    </form>
+                </article>
+
+                <article class="profile-card danger-zone">
+                    <h3>Delete Profile</h3>
+                    <p>This action permanently deletes your profile account.</p>
+                    <button id="profile-delete-btn" type="button" class="btn-danger">Delete Profile</button>
+                </article>
+            </div>
+        </section>
+
+        <section id="customer-cart-section" class="customer-section{% if page_name != 'cart' %} hidden{% endif %}">
+            <div class="section-heading">
+                <div>
+                    <p class="section-kicker">Your order</p>
+                    <h2>Cart summary</h2>
+                </div>
+                <div class="section-actions">
+                    <button id="clear-cart-btn" type="button" class="btn-secondary">Clear Cart</button>
+                </div>
+            </div>
+            <div class="cart-layout">
+                <div id="cart-items" class="cart-items"></div>
+                <aside class="cart-summary card">
+                    <p>Items</p>
+                    <h3 id="cart-item-count">0</h3>
+                    <p>Subtotal</p>
+                    <h3 id="cart-subtotal">Rs 0.00</h3>
+                    <p>Loyalty Discount <span id="cart-discount-percent">(0%)</span></p>
+                    <h3 id="cart-discount-amount">- Rs 0.00</h3>
+                    <p>Payable total</p>
+                    <h2 id="cart-total">Rs 0.00</h2>
+                    <p>Special Instruction</p>
+                    <textarea
+                        id="cart-special-instruction"
+                        class="cart-special-instruction"
+                        rows="3"
+                        maxlength="1000"
+                        placeholder="Any notes for this order? (e.g., less spicy, no onions, gate code)"></textarea>
+                    <p>Payment Mode</p>
+                    <div id="payment-mode-options" class="payment-modes">
+                        <label><input type="radio" name="payment-mode" value="online" checked /> Online (QuickBites)</label>
+                        <label><input type="radio" name="payment-mode" value="cod" /> Cash on Delivery (COD)</label>
+                    </div>
+                    <div id="payment-demo-actions" class="row-inline">
+                        <button type="button" data-payment-status="successful">Mark Successful</button>
+                        <button type="button" class="btn-secondary" data-payment-status="processing">Mark Processing</button>
+                        <button type="button" class="btn-danger" data-payment-status="failed">Mark Failed</button>
+                    </div>
+                    <div id="cod-place-order-wrap" class="row-inline hidden">
+                        <button id="cod-place-order-btn" type="button">Place Order (COD)</button>
+                    </div>
+                    <hr />
+                    <h4>Last Payment Status</h4>
+                    <div id="last-payment-status" class="empty-state">No order payments found yet.</div>
+                </aside>
+            </div>
+        </section>
+    </main>
+
+    <footer class="customer-footer">
+        <div>
+            <strong>QuickBites</strong>
+            <p>Food delivery prototype for local development, RBAC demos, and customer journey testing.</p>
+        </div>
+        <div>
+            <strong>Customer Pages</strong>
+            <p>Home, Restaurants, Browse, Cart, and Profile now live as separate routes.</p>
+        </div>
+        <div>
+            <strong>Support</strong>
+            <p>Email: support@quickbites.local</p>
+            <p>Hours: 8 AM to 11 PM</p>
+        </div>
+    </footer>
+
+    <div id="toast" class="toast hidden"></div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+    <script src="/static/js/customer.js"></script>
+</body>
+</html>
