@@ -1,0 +1,2712 @@
+{
+  "after": {
+    "api": {
+      "auth": {
+        "Admin": {
+          "response": {
+            "data": {
+              "expiresAt": "2026-03-22T19:41:50.108222",
+              "member": {
+                "activeRole": "Admin",
+                "email": "aman.shah1@example.com",
+                "memberID": 1,
+                "name": "Aman Shah",
+                "roles": [
+                  "Admin"
+                ]
+              },
+              "token": "9aff454e3aa60f56c112884b6c31eb23265e39626c602480bb57b8298cf159dd"
+            },
+            "message": "Login successful"
+          },
+          "status": 200,
+          "tokenPresent": true
+        },
+        "Customer": {
+          "response": {
+            "data": {
+              "expiresAt": "2026-03-22T19:41:50.365334",
+              "member": {
+                "activeRole": "Customer",
+                "email": "riya.patel2@example.com",
+                "memberID": 2,
+                "name": "Riya Patel",
+                "roles": [
+                  "Customer"
+                ]
+              },
+              "token": "245aade410ee2b59ac670df2ab5c1ee0bf342b29c2d04c2f6e5146ab0d59d7fd"
+            },
+            "message": "Login successful"
+          },
+          "status": 200,
+          "tokenPresent": true
+        },
+        "DeliveryPartner": {
+          "response": {
+            "data": {
+              "expiresAt": "2026-03-22T19:41:50.626082",
+              "member": {
+                "activeRole": "DeliveryPartner",
+                "email": "driver1@example.com",
+                "memberID": 11,
+                "name": "Driver One",
+                "roles": [
+                  "DeliveryPartner"
+                ]
+              },
+              "token": "0c8194b777b31161ba6b1886d8f3c8b1d9f35e73dd274ba8805282e61ace08b4"
+            },
+            "message": "Login successful"
+          },
+          "status": 200,
+          "tokenPresent": true
+        }
+      },
+      "timings": {
+        "api_admin_audits": {
+          "method": "GET",
+          "path": "/api/admin/audits",
+          "role": "Admin",
+          "timing": {
+            "ms": {
+              "max": 33.374340000591474,
+              "mean": 27.545775400067214,
+              "min": 24.242757999672904,
+              "p50": 27.34664200033876,
+              "p95": 30.141064999952505
+            },
+            "runs": 25,
+            "statusCodes": {
+              "200": 25
+            },
+            "warmup": 5
+          }
+        },
+        "api_admin_overview": {
+          "method": "GET",
+          "path": "/api/admin/overview",
+          "role": "Admin",
+          "timing": {
+            "ms": {
+              "max": 36.81106999920303,
+              "mean": 30.438098479935434,
+              "min": 25.467790000220702,
+              "p50": 30.26111400049558,
+              "p95": 33.534290999341465
+            },
+            "runs": 25,
+            "statusCodes": {
+              "200": 25
+            },
+            "warmup": 5
+          }
+        },
+        "api_customer_cart": {
+          "method": "GET",
+          "path": "/api/customer/cart",
+          "role": "Customer",
+          "timing": {
+            "ms": {
+              "max": 38.78565600007278,
+              "mean": 30.08754971990129,
+              "min": 22.390960999473464,
+              "p50": 29.875571000047785,
+              "p95": 36.48835599960876
+            },
+            "runs": 25,
+            "statusCodes": {
+              "200": 25
+            },
+            "warmup": 5
+          }
+        },
+        "api_customer_last_payment": {
+          "method": "GET",
+          "path": "/api/customer/payments/last",
+          "role": "Customer",
+          "timing": {
+            "ms": {
+              "max": 30.978739000602218,
+              "mean": 27.933203759967,
+              "min": 24.783735999335477,
+              "p50": 28.072361000340607,
+              "p95": 30.439578000368783
+            },
+            "runs": 25,
+            "statusCodes": {
+              "200": 25
+            },
+            "warmup": 5
+          }
+        },
+        "api_customer_orders": {
+          "method": "GET",
+          "path": "/api/customer/orders",
+          "role": "Customer",
+          "timing": {
+            "ms": {
+              "max": 38.05852999994386,
+              "mean": 30.028803160166717,
+              "min": 24.170909000531537,
+              "p50": 29.67373100000259,
+              "p95": 35.61668299971643
+            },
+            "runs": 25,
+            "statusCodes": {
+              "200": 25
+            },
+            "warmup": 5
+          }
+        },
+        "api_customer_profile_orders": {
+          "method": "GET",
+          "path": "/api/customer/profile/orders",
+          "role": "Customer",
+          "timing": {
+            "ms": {
+              "max": 39.70181399927242,
+              "mean": 29.519165199963027,
+              "min": 23.2956429999831,
+              "p50": 29.52985199954128,
+              "p95": 32.45163099927595
+            },
+            "runs": 25,
+            "statusCodes": {
+              "200": 25
+            },
+            "warmup": 5
+          }
+        },
+        "api_delivery_assignments": {
+          "method": "GET",
+          "path": "/api/delivery/assignments",
+          "role": "DeliveryPartner",
+          "timing": {
+            "ms": {
+              "max": 36.00296500007971,
+              "mean": 27.997591919993283,
+              "min": 24.186032000216073,
+              "p50": 27.796630999546323,
+              "p95": 30.524482000146236
+            },
+            "runs": 25,
+            "statusCodes": {
+              "200": 25
+            },
+            "warmup": 5
+          }
+        },
+        "api_delivery_completed_orders": {
+          "method": "GET",
+          "path": "/api/delivery/completed-orders",
+          "role": "DeliveryPartner",
+          "timing": {
+            "ms": {
+              "max": 31.527045000075304,
+              "mean": 28.251536119896627,
+              "min": 23.9532239993423,
+              "p50": 28.41080999951373,
+              "p95": 30.515315000229748
+            },
+            "runs": 25,
+            "statusCodes": {
+              "200": 25
+            },
+            "warmup": 5
+          }
+        },
+        "api_delivery_live_orders": {
+          "method": "GET",
+          "path": "/api/delivery/live-orders",
+          "role": "DeliveryPartner",
+          "timing": {
+            "ms": {
+              "max": 35.43738600001234,
+              "mean": 29.861074599939457,
+              "min": 25.19441200001893,
+              "p50": 29.48061500046606,
+              "p95": 33.861000999422686
+            },
+            "runs": 25,
+            "statusCodes": {
+              "200": 25
+            },
+            "warmup": 5
+          }
+        },
+        "api_menu_items": {
+          "method": "GET",
+          "path": "/api/menu-items?restaurantID=201",
+          "role": "Customer",
+          "timing": {
+            "ms": {
+              "max": 43.94887199941877,
+              "mean": 29.88466991988389,
+              "min": 24.271388999295596,
+              "p50": 28.904748000059044,
+              "p95": 38.84642499997426
+            },
+            "runs": 25,
+            "statusCodes": {
+              "200": 25
+            },
+            "warmup": 5
+          }
+        },
+        "api_menu_items_search": {
+          "method": "GET",
+          "path": "/api/menu-items?search=Paneer",
+          "role": "Customer",
+          "timing": {
+            "ms": {
+              "max": 32.92965199943865,
+              "mean": 28.766967880037555,
+              "min": 25.634835999881034,
+              "p50": 27.65398700012156,
+              "p95": 32.64002499963681
+            },
+            "runs": 25,
+            "statusCodes": {
+              "200": 25
+            },
+            "warmup": 5
+          }
+        },
+        "api_restaurant_orders": {
+          "method": "GET",
+          "path": "/api/restaurant/orders?restaurantID=201",
+          "role": "Admin",
+          "timing": {
+            "ms": {
+              "max": 35.3425490002337,
+              "mean": 28.742383120043087,
+              "min": 24.141629000041576,
+              "p50": 28.864660000181175,
+              "p95": 32.21331199983979
+            },
+            "runs": 25,
+            "statusCodes": {
+              "200": 25
+            },
+            "warmup": 5
+          }
+        },
+        "api_restaurants": {
+          "method": "GET",
+          "path": "/api/restaurants",
+          "role": "Customer",
+          "timing": {
+            "ms": {
+              "max": 40.18647599968972,
+              "mean": 29.013178079985664,
+              "min": 23.622801999408694,
+              "p50": 28.128483999353193,
+              "p95": 34.40311099984683
+            },
+            "runs": 25,
+            "statusCodes": {
+              "200": 25
+            },
+            "warmup": 5
+          }
+        }
+      }
+    },
+    "queries": {
+      "explain": {
+        "admin_audits": [
+          {
+            "Extra": "Using filesort",
+            "filtered": 100.0,
+            "id": 1,
+            "key": null,
+            "key_len": null,
+            "partitions": null,
+            "possible_keys": null,
+            "ref": null,
+            "rows": 2,
+            "select_type": "SIMPLE",
+            "table": "AuditLog",
+            "type": "ALL"
+          }
+        ],
+        "admin_overview_recent": [
+          {
+            "Extra": "Using filesort",
+            "filtered": 100.0,
+            "id": 1,
+            "key": null,
+            "key_len": null,
+            "partitions": null,
+            "possible_keys": null,
+            "ref": null,
+            "rows": 12,
+            "select_type": "SIMPLE",
+            "table": "o",
+            "type": "ALL"
+          },
+          {
+            "Extra": null,
+            "filtered": 100.0,
+            "id": 1,
+            "key": "PRIMARY",
+            "key_len": "4",
+            "partitions": null,
+            "possible_keys": "PRIMARY",
+            "ref": "QB.o.restaurantID",
+            "rows": 1,
+            "select_type": "SIMPLE",
+            "table": "r",
+            "type": "eq_ref"
+          },
+          {
+            "Extra": null,
+            "filtered": 100.0,
+            "id": 1,
+            "key": "PRIMARY",
+            "key_len": "4",
+            "partitions": null,
+            "possible_keys": "PRIMARY",
+            "ref": "QB.o.paymentID",
+            "rows": 1,
+            "select_type": "SIMPLE",
+            "table": "p",
+            "type": "eq_ref"
+          }
+        ],
+        "customer_addresses": [
+          {
+            "Extra": null,
+            "filtered": 100.0,
+            "id": 1,
+            "key": "PRIMARY",
+            "key_len": "4",
+            "partitions": null,
+            "possible_keys": "PRIMARY,qb_idx_address_customer_saved",
+            "ref": "const",
+            "rows": 2,
+            "select_type": "SIMPLE",
+            "table": "Address",
+            "type": "ref"
+          }
+        ],
+        "customer_cart": [
+          {
+            "Extra": null,
+            "filtered": 100.0,
+            "id": 1,
+            "key": "PRIMARY",
+            "key_len": "4",
+            "partitions": null,
+            "possible_keys": "PRIMARY,restaurantID",
+            "ref": "const",
+            "rows": 2,
+            "select_type": "SIMPLE",
+            "table": "ci",
+            "type": "ref"
+          },
+          {
+            "Extra": "Using where",
+            "filtered": 100.0,
+            "id": 1,
+            "key": "PRIMARY",
+            "key_len": "4",
+            "partitions": null,
+            "possible_keys": "PRIMARY,qb_idx_restaurant_active_name",
+            "ref": "QB.ci.restaurantID",
+            "rows": 1,
+            "select_type": "SIMPLE",
+            "table": "r",
+            "type": "eq_ref"
+          },
+          {
+            "Extra": "Using where",
+            "filtered": 10.0,
+            "id": 1,
+            "key": "PRIMARY",
+            "key_len": "8",
+            "partitions": null,
+            "possible_keys": "PRIMARY,qb_idx_menuitem_rest_disc_item",
+            "ref": "QB.ci.restaurantID,QB.ci.itemID",
+            "rows": 1,
+            "select_type": "SIMPLE",
+            "table": "mi",
+            "type": "eq_ref"
+          }
+        ],
+        "customer_item_reviews": [
+          {
+            "Extra": "Using index; Using temporary; Using filesort",
+            "filtered": 100.0,
+            "id": 1,
+            "key": "qb_idx_orders_customer_time",
+            "key_len": "4",
+            "partitions": null,
+            "possible_keys": "PRIMARY,customerID,qb_idx_orders_customer_time",
+            "ref": "const",
+            "rows": 2,
+            "select_type": "SIMPLE",
+            "table": "o",
+            "type": "ref"
+          },
+          {
+            "Extra": null,
+            "filtered": 100.0,
+            "id": 1,
+            "key": "qb_idx_menuitemrating_order",
+            "key_len": "4",
+            "partitions": null,
+            "possible_keys": "PRIMARY,qb_idx_menuitemrating_order",
+            "ref": "QB.o.orderID",
+            "rows": 1,
+            "select_type": "SIMPLE",
+            "table": "mir",
+            "type": "ref"
+          },
+          {
+            "Extra": null,
+            "filtered": 100.0,
+            "id": 1,
+            "key": "PRIMARY",
+            "key_len": "4",
+            "partitions": null,
+            "possible_keys": "PRIMARY",
+            "ref": "QB.mir.restaurantID",
+            "rows": 1,
+            "select_type": "SIMPLE",
+            "table": "r",
+            "type": "eq_ref"
+          },
+          {
+            "Extra": null,
+            "filtered": 100.0,
+            "id": 1,
+            "key": "PRIMARY",
+            "key_len": "8",
+            "partitions": null,
+            "possible_keys": "PRIMARY,qb_idx_menuitem_rest_disc_item",
+            "ref": "QB.mir.restaurantID,QB.mir.itemID",
+            "rows": 1,
+            "select_type": "SIMPLE",
+            "table": "mi",
+            "type": "eq_ref"
+          }
+        ],
+        "customer_last_payment": [
+          {
+            "Extra": "Backward index scan",
+            "filtered": 100.0,
+            "id": 1,
+            "key": "qb_idx_payment_customer_for_time",
+            "key_len": "46",
+            "partitions": null,
+            "possible_keys": "qb_idx_payment_customer_for_time,qb_idx_payment_for_status_time,qb_idx_payment_for_status_type_time",
+            "ref": "const,const",
+            "rows": 2,
+            "select_type": "SIMPLE",
+            "table": "Payment",
+            "type": "ref"
+          }
+        ],
+        "customer_order_reviews": [
+          {
+            "Extra": "Backward index scan",
+            "filtered": 100.0,
+            "id": 1,
+            "key": "qb_idx_orders_customer_time",
+            "key_len": "4",
+            "partitions": null,
+            "possible_keys": "PRIMARY,customerID,qb_idx_orders_restaurant_time,qb_idx_orders_customer_time",
+            "ref": "const",
+            "rows": 2,
+            "select_type": "SIMPLE",
+            "table": "o",
+            "type": "ref"
+          },
+          {
+            "Extra": null,
+            "filtered": 100.0,
+            "id": 1,
+            "key": "PRIMARY",
+            "key_len": "4",
+            "partitions": null,
+            "possible_keys": "PRIMARY",
+            "ref": "QB.o.restaurantID",
+            "rows": 1,
+            "select_type": "SIMPLE",
+            "table": "r",
+            "type": "eq_ref"
+          },
+          {
+            "Extra": null,
+            "filtered": 100.0,
+            "id": 1,
+            "key": "PRIMARY",
+            "key_len": "4",
+            "partitions": null,
+            "possible_keys": "PRIMARY",
+            "ref": "QB.o.orderID",
+            "rows": 1,
+            "select_type": "SIMPLE",
+            "table": "orr",
+            "type": "eq_ref"
+          }
+        ],
+        "customer_orders_list": [
+          {
+            "Extra": "Backward index scan",
+            "filtered": 100.0,
+            "id": 1,
+            "key": "qb_idx_orders_customer_time",
+            "key_len": "4",
+            "partitions": null,
+            "possible_keys": "customerID,qb_idx_orders_restaurant_time,qb_idx_orders_customer_time",
+            "ref": "const",
+            "rows": 2,
+            "select_type": "SIMPLE",
+            "table": "o",
+            "type": "ref"
+          },
+          {
+            "Extra": null,
+            "filtered": 100.0,
+            "id": 1,
+            "key": "PRIMARY",
+            "key_len": "4",
+            "partitions": null,
+            "possible_keys": "PRIMARY",
+            "ref": "QB.o.restaurantID",
+            "rows": 1,
+            "select_type": "SIMPLE",
+            "table": "r",
+            "type": "eq_ref"
+          },
+          {
+            "Extra": null,
+            "filtered": 100.0,
+            "id": 1,
+            "key": "PRIMARY",
+            "key_len": "4",
+            "partitions": null,
+            "possible_keys": "PRIMARY",
+            "ref": "QB.o.paymentID",
+            "rows": 1,
+            "select_type": "SIMPLE",
+            "table": "p",
+            "type": "eq_ref"
+          }
+        ],
+        "customer_profile_orders": [
+          {
+            "Extra": "Backward index scan",
+            "filtered": 100.0,
+            "id": 1,
+            "key": "qb_idx_orders_customer_time",
+            "key_len": "4",
+            "partitions": null,
+            "possible_keys": "customerID,qb_idx_orders_restaurant_time,qb_idx_orders_customer_time",
+            "ref": "const",
+            "rows": 2,
+            "select_type": "SIMPLE",
+            "table": "o",
+            "type": "ref"
+          },
+          {
+            "Extra": null,
+            "filtered": 100.0,
+            "id": 1,
+            "key": "PRIMARY",
+            "key_len": "8",
+            "partitions": null,
+            "possible_keys": "PRIMARY,qb_idx_address_customer_saved",
+            "ref": "const,QB.o.addressID",
+            "rows": 1,
+            "select_type": "SIMPLE",
+            "table": "a",
+            "type": "eq_ref"
+          },
+          {
+            "Extra": null,
+            "filtered": 100.0,
+            "id": 1,
+            "key": "PRIMARY",
+            "key_len": "4",
+            "partitions": null,
+            "possible_keys": "PRIMARY",
+            "ref": "QB.o.restaurantID",
+            "rows": 1,
+            "select_type": "SIMPLE",
+            "table": "r",
+            "type": "eq_ref"
+          },
+          {
+            "Extra": null,
+            "filtered": 100.0,
+            "id": 1,
+            "key": "PRIMARY",
+            "key_len": "4",
+            "partitions": null,
+            "possible_keys": "PRIMARY",
+            "ref": "QB.o.paymentID",
+            "rows": 1,
+            "select_type": "SIMPLE",
+            "table": "p",
+            "type": "eq_ref"
+          },
+          {
+            "Extra": null,
+            "filtered": 100.0,
+            "id": 1,
+            "key": "PRIMARY",
+            "key_len": "4",
+            "partitions": null,
+            "possible_keys": "PRIMARY",
+            "ref": "QB.o.orderID",
+            "rows": 1,
+            "select_type": "SIMPLE",
+            "table": "orr",
+            "type": "eq_ref"
+          },
+          {
+            "Extra": null,
+            "filtered": 100.0,
+            "id": 1,
+            "key": "qb_idx_delivery_order",
+            "key_len": "4",
+            "partitions": null,
+            "possible_keys": "qb_idx_delivery_order",
+            "ref": "QB.o.orderID",
+            "rows": 1,
+            "select_type": "SIMPLE",
+            "table": "da",
+            "type": "ref"
+          },
+          {
+            "Extra": null,
+            "filtered": 100.0,
+            "id": 1,
+            "key": "PRIMARY",
+            "key_len": "4",
+            "partitions": null,
+            "possible_keys": "PRIMARY",
+            "ref": "QB.da.PartnerID",
+            "rows": 1,
+            "select_type": "SIMPLE",
+            "table": "dp",
+            "type": "eq_ref"
+          },
+          {
+            "Extra": null,
+            "filtered": 100.0,
+            "id": 1,
+            "key": "PRIMARY",
+            "key_len": "4",
+            "partitions": null,
+            "possible_keys": "PRIMARY",
+            "ref": "QB.da.PartnerID",
+            "rows": 1,
+            "select_type": "SIMPLE",
+            "table": "dpm",
+            "type": "eq_ref"
+          }
+        ],
+        "delivery_assignments": [
+          {
+            "Extra": "Backward index scan",
+            "filtered": 100.0,
+            "id": 1,
+            "key": "qb_idx_delivery_partner_acceptance",
+            "key_len": "4",
+            "partitions": null,
+            "possible_keys": "qb_idx_delivery_partner_acceptance,qb_idx_delivery_order,qb_idx_delivery_partner_deliverytime",
+            "ref": "const",
+            "rows": 2,
+            "select_type": "SIMPLE",
+            "table": "da",
+            "type": "ref"
+          },
+          {
+            "Extra": null,
+            "filtered": 100.0,
+            "id": 1,
+            "key": "PRIMARY",
+            "key_len": "4",
+            "partitions": null,
+            "possible_keys": "PRIMARY,qb_idx_orders_restaurant_time",
+            "ref": "QB.da.OrderID",
+            "rows": 1,
+            "select_type": "SIMPLE",
+            "table": "o",
+            "type": "eq_ref"
+          },
+          {
+            "Extra": null,
+            "filtered": 100.0,
+            "id": 1,
+            "key": "PRIMARY",
+            "key_len": "4",
+            "partitions": null,
+            "possible_keys": "PRIMARY",
+            "ref": "QB.o.restaurantID",
+            "rows": 1,
+            "select_type": "SIMPLE",
+            "table": "r",
+            "type": "eq_ref"
+          }
+        ],
+        "delivery_completed_orders": [
+          {
+            "Extra": "Backward index scan",
+            "filtered": 100.0,
+            "id": 1,
+            "key": "qb_idx_delivery_partner_deliverytime",
+            "key_len": "4",
+            "partitions": null,
+            "possible_keys": "qb_idx_delivery_partner_acceptance,qb_idx_delivery_order,qb_idx_delivery_partner_deliverytime",
+            "ref": "const",
+            "rows": 2,
+            "select_type": "SIMPLE",
+            "table": "da",
+            "type": "ref"
+          },
+          {
+            "Extra": "Using where",
+            "filtered": 91.67,
+            "id": 1,
+            "key": "PRIMARY",
+            "key_len": "4",
+            "partitions": null,
+            "possible_keys": "PRIMARY,customerID,qb_idx_orders_restaurant_time,qb_idx_orders_customer_time,qb_idx_orders_status_time",
+            "ref": "QB.da.OrderID",
+            "rows": 1,
+            "select_type": "SIMPLE",
+            "table": "o",
+            "type": "eq_ref"
+          },
+          {
+            "Extra": null,
+            "filtered": 100.0,
+            "id": 1,
+            "key": "PRIMARY",
+            "key_len": "4",
+            "partitions": null,
+            "possible_keys": "PRIMARY",
+            "ref": "QB.o.restaurantID",
+            "rows": 1,
+            "select_type": "SIMPLE",
+            "table": "r",
+            "type": "eq_ref"
+          },
+          {
+            "Extra": null,
+            "filtered": 100.0,
+            "id": 1,
+            "key": "PRIMARY",
+            "key_len": "4",
+            "partitions": null,
+            "possible_keys": "PRIMARY",
+            "ref": "QB.o.customerID",
+            "rows": 1,
+            "select_type": "SIMPLE",
+            "table": "m",
+            "type": "eq_ref"
+          }
+        ],
+        "delivery_live_orders": [
+          {
+            "Extra": "Using index condition; Using filesort",
+            "filtered": 100.0,
+            "id": 1,
+            "key": "qb_idx_orders_status_time",
+            "key_len": "82",
+            "partitions": null,
+            "possible_keys": "customerID,qb_idx_orders_restaurant_time,qb_idx_orders_customer_time,qb_idx_orders_status_time",
+            "ref": null,
+            "rows": 3,
+            "select_type": "SIMPLE",
+            "table": "o",
+            "type": "range"
+          },
+          {
+            "Extra": null,
+            "filtered": 100.0,
+            "id": 1,
+            "key": "PRIMARY",
+            "key_len": "4",
+            "partitions": null,
+            "possible_keys": "PRIMARY",
+            "ref": "QB.o.restaurantID",
+            "rows": 1,
+            "select_type": "SIMPLE",
+            "table": "r",
+            "type": "eq_ref"
+          },
+          {
+            "Extra": "Using where; Not exists; Using index",
+            "filtered": 100.0,
+            "id": 1,
+            "key": "qb_idx_delivery_order",
+            "key_len": "4",
+            "partitions": null,
+            "possible_keys": "qb_idx_delivery_order",
+            "ref": "QB.o.orderID",
+            "rows": 1,
+            "select_type": "SIMPLE",
+            "table": "da",
+            "type": "ref"
+          },
+          {
+            "Extra": null,
+            "filtered": 100.0,
+            "id": 1,
+            "key": "PRIMARY",
+            "key_len": "8",
+            "partitions": null,
+            "possible_keys": "PRIMARY,qb_idx_address_customer_saved",
+            "ref": "QB.o.customerID,QB.o.addressID",
+            "rows": 1,
+            "select_type": "SIMPLE",
+            "table": "a",
+            "type": "eq_ref"
+          },
+          {
+            "Extra": null,
+            "filtered": 100.0,
+            "id": 1,
+            "key": "PRIMARY",
+            "key_len": "4",
+            "partitions": null,
+            "possible_keys": "PRIMARY",
+            "ref": "QB.o.customerID",
+            "rows": 1,
+            "select_type": "SIMPLE",
+            "table": "m",
+            "type": "eq_ref"
+          }
+        ],
+        "expire_pending_payments": [
+          {
+            "Extra": "Using index condition; Using where",
+            "filtered": 10.0,
+            "id": 1,
+            "key": "qb_idx_payment_for_status_time",
+            "key_len": "77",
+            "partitions": null,
+            "possible_keys": "qb_idx_payment_for_status_time,qb_idx_payment_for_status_type_time",
+            "ref": null,
+            "rows": 1,
+            "select_type": "SIMPLE",
+            "table": "Payment",
+            "type": "range"
+          }
+        ],
+        "menu_items_by_restaurant": [
+          {
+            "Extra": null,
+            "filtered": 100.0,
+            "id": 1,
+            "key": "PRIMARY",
+            "key_len": "4",
+            "partitions": null,
+            "possible_keys": "PRIMARY,qb_idx_restaurant_active_name",
+            "ref": "const",
+            "rows": 1,
+            "select_type": "SIMPLE",
+            "table": "r",
+            "type": "const"
+          },
+          {
+            "Extra": "Using where",
+            "filtered": 10.0,
+            "id": 1,
+            "key": "PRIMARY",
+            "key_len": "4",
+            "partitions": null,
+            "possible_keys": "PRIMARY,qb_idx_menuitem_rest_disc_item",
+            "ref": "const",
+            "rows": 2,
+            "select_type": "SIMPLE",
+            "table": "mi",
+            "type": "ref"
+          }
+        ],
+        "menu_items_search": [
+          {
+            "Extra": "Using where",
+            "filtered": 5.0,
+            "id": 1,
+            "key": "PRIMARY",
+            "key_len": "8",
+            "partitions": null,
+            "possible_keys": "PRIMARY,qb_idx_menuitem_rest_disc_item",
+            "ref": null,
+            "rows": 20,
+            "select_type": "SIMPLE",
+            "table": "mi",
+            "type": "index"
+          },
+          {
+            "Extra": "Using where",
+            "filtered": 100.0,
+            "id": 1,
+            "key": "PRIMARY",
+            "key_len": "4",
+            "partitions": null,
+            "possible_keys": "PRIMARY,qb_idx_restaurant_active_name",
+            "ref": "QB.mi.restaurantID",
+            "rows": 1,
+            "select_type": "SIMPLE",
+            "table": "r",
+            "type": "eq_ref"
+          }
+        ],
+        "restaurant_orders_list": [
+          {
+            "Extra": "Backward index scan",
+            "filtered": 100.0,
+            "id": 1,
+            "key": "qb_idx_orders_restaurant_time",
+            "key_len": "4",
+            "partitions": null,
+            "possible_keys": "qb_idx_orders_restaurant_time",
+            "ref": "const",
+            "rows": 1,
+            "select_type": "SIMPLE",
+            "table": "o",
+            "type": "ref"
+          },
+          {
+            "Extra": null,
+            "filtered": 100.0,
+            "id": 1,
+            "key": "PRIMARY",
+            "key_len": "4",
+            "partitions": null,
+            "possible_keys": "PRIMARY",
+            "ref": "QB.o.paymentID",
+            "rows": 1,
+            "select_type": "SIMPLE",
+            "table": "p",
+            "type": "eq_ref"
+          },
+          {
+            "Extra": null,
+            "filtered": 100.0,
+            "id": 1,
+            "key": "qb_idx_delivery_order",
+            "key_len": "4",
+            "partitions": null,
+            "possible_keys": "qb_idx_delivery_order",
+            "ref": "QB.o.orderID",
+            "rows": 1,
+            "select_type": "SIMPLE",
+            "table": "da",
+            "type": "ref"
+          }
+        ],
+        "restaurants_list": [
+          {
+            "Extra": "Using where; Using filesort",
+            "filtered": 100.0,
+            "id": 1,
+            "key": null,
+            "key_len": null,
+            "partitions": null,
+            "possible_keys": "qb_idx_restaurant_active_name",
+            "ref": null,
+            "rows": 10,
+            "select_type": "SIMPLE",
+            "table": "Restaurant",
+            "type": "ALL"
+          }
+        ],
+        "saved_address_lookup": [
+          {
+            "Extra": "Using index",
+            "filtered": 100.0,
+            "id": 1,
+            "key": "qb_idx_address_customer_saved",
+            "key_len": "5",
+            "partitions": null,
+            "possible_keys": "PRIMARY,qb_idx_address_customer_saved",
+            "ref": "const,const",
+            "rows": 2,
+            "select_type": "SIMPLE",
+            "table": "Address",
+            "type": "ref"
+          }
+        ]
+      },
+      "timings": {
+        "admin_audits": {
+          "ms": {
+            "max": 0.3460729994912981,
+            "mean": 0.26887739997619065,
+            "min": 0.18451800042385003,
+            "p50": 0.2770159999272437,
+            "p95": 0.3264400002080947
+          },
+          "runs": 25,
+          "warmup": 5
+        },
+        "admin_overview_recent": {
+          "ms": {
+            "max": 0.7144310002331622,
+            "mean": 0.3985711600398645,
+            "min": 0.24749400017753942,
+            "p50": 0.39952299994183704,
+            "p95": 0.5121829999552574
+          },
+          "runs": 25,
+          "warmup": 5
+        },
+        "customer_addresses": {
+          "ms": {
+            "max": 0.4114459998163511,
+            "mean": 0.3190047600219259,
+            "min": 0.22644299951934954,
+            "p50": 0.3047479995075264,
+            "p95": 0.38805100030003814
+          },
+          "runs": 25,
+          "warmup": 5
+        },
+        "customer_cart": {
+          "ms": {
+            "max": 0.42927499998768326,
+            "mean": 0.3307187200334738,
+            "min": 0.25164199996652314,
+            "p50": 0.32844499946804717,
+            "p95": 0.3941240001950064
+          },
+          "runs": 25,
+          "warmup": 5
+        },
+        "customer_item_reviews": {
+          "ms": {
+            "max": 0.6220980003490695,
+            "mean": 0.4075378798734164,
+            "min": 0.2880359998016502,
+            "p50": 0.3808170004049316,
+            "p95": 0.5284470007609343
+          },
+          "runs": 25,
+          "warmup": 5
+        },
+        "customer_last_payment": {
+          "ms": {
+            "max": 0.40687599994271295,
+            "mean": 0.2500583199071116,
+            "min": 0.17964400012715487,
+            "p50": 0.23321200023929123,
+            "p95": 0.3289140004198998
+          },
+          "runs": 25,
+          "warmup": 5
+        },
+        "customer_order_reviews": {
+          "ms": {
+            "max": 0.40184499994211365,
+            "mean": 0.2894322801148519,
+            "min": 0.2108369999405113,
+            "p50": 0.28310000016062986,
+            "p95": 0.38227900040510576
+          },
+          "runs": 25,
+          "warmup": 5
+        },
+        "customer_orders_list": {
+          "ms": {
+            "max": 2.81758099936269,
+            "mean": 0.8197626399851288,
+            "min": 0.35990000014862744,
+            "p50": 0.7599870004924014,
+            "p95": 1.3414670002021012
+          },
+          "runs": 25,
+          "warmup": 5
+        },
+        "customer_profile_orders": {
+          "ms": {
+            "max": 0.6810929999119253,
+            "mean": 0.4553270398901077,
+            "min": 0.3252989999964484,
+            "p50": 0.44142999922769377,
+            "p95": 0.5211420002524392
+          },
+          "runs": 25,
+          "warmup": 5
+        },
+        "delivery_assignments": {
+          "ms": {
+            "max": 0.5567930002143839,
+            "mean": 0.29183675989770563,
+            "min": 0.19282999983261107,
+            "p50": 0.26349299969297135,
+            "p95": 0.42447899977560155
+          },
+          "runs": 25,
+          "warmup": 5
+        },
+        "delivery_completed_orders": {
+          "ms": {
+            "max": 0.5887880006412161,
+            "mean": 0.42282983999029966,
+            "min": 0.29422700026771054,
+            "p50": 0.4232459996273974,
+            "p95": 0.489062999804446
+          },
+          "runs": 25,
+          "warmup": 5
+        },
+        "delivery_live_orders": {
+          "ms": {
+            "max": 0.6114910001997487,
+            "mean": 0.3639354401093442,
+            "min": 0.26034199981950223,
+            "p50": 0.34919200061267475,
+            "p95": 0.44530800005304627
+          },
+          "runs": 25,
+          "warmup": 5
+        },
+        "expire_pending_payments": {
+          "ms": {
+            "max": 0.4305559996282682,
+            "mean": 0.2979585200591828,
+            "min": 0.19121900004392955,
+            "p50": 0.2808300005199271,
+            "p95": 0.4172219996689819
+          },
+          "runs": 25,
+          "warmup": 5
+        },
+        "menu_items_by_restaurant": {
+          "ms": {
+            "max": 0.6510699995487812,
+            "mean": 0.34481231996323913,
+            "min": 0.22870599968882743,
+            "p50": 0.33356699987052707,
+            "p95": 0.42140100049437024
+          },
+          "runs": 25,
+          "warmup": 5
+        },
+        "menu_items_search": {
+          "ms": {
+            "max": 0.6889480000609183,
+            "mean": 0.37163720015087165,
+            "min": 0.26480599990463816,
+            "p50": 0.33519800035719527,
+            "p95": 0.45425500047713285
+          },
+          "runs": 25,
+          "warmup": 5
+        },
+        "restaurant_orders_list": {
+          "ms": {
+            "max": 0.5116780002936139,
+            "mean": 0.3712063200509874,
+            "min": 0.22783300028095255,
+            "p50": 0.37689100008719834,
+            "p95": 0.48539699946559267
+          },
+          "runs": 25,
+          "warmup": 5
+        },
+        "restaurants_list": {
+          "ms": {
+            "max": 0.5031479995523114,
+            "mean": 0.3331234399593086,
+            "min": 0.22240099951886805,
+            "p50": 0.3278209997006343,
+            "p95": 0.421363999521418
+          },
+          "runs": 25,
+          "warmup": 5
+        },
+        "saved_address_lookup": {
+          "ms": {
+            "max": 0.3816250000454602,
+            "mean": 0.2192774400464259,
+            "min": 0.14466199991147732,
+            "p50": 0.18459900002198992,
+            "p95": 0.3374309999344405
+          },
+          "runs": 25,
+          "warmup": 5
+        }
+      }
+    }
+  },
+  "apply": [
+    {
+      "applied": true,
+      "error": null,
+      "statement": "USE QB"
+    },
+    {
+      "applied": true,
+      "error": null,
+      "statement": "CREATE INDEX qb_idx_orders_customer_time ON Orders(customerID, orderTime)"
+    },
+    {
+      "applied": false,
+      "error": {
+        "errno": 1061,
+        "msg": "1061 (42000): Duplicate key name 'qb_idx_orders_restaurant_time'",
+        "sqlstate": "42000"
+      },
+      "statement": "CREATE INDEX qb_idx_orders_restaurant_time ON Orders(restaurantID, orderTime)"
+    },
+    {
+      "applied": true,
+      "error": null,
+      "statement": "CREATE INDEX qb_idx_orders_status_time ON Orders(orderStatus, orderTime)"
+    },
+    {
+      "applied": false,
+      "error": {
+        "errno": 1061,
+        "msg": "1061 (42000): Duplicate key name 'qb_idx_delivery_partner_acceptance'",
+        "sqlstate": "42000"
+      },
+      "statement": "CREATE INDEX qb_idx_delivery_partner_acceptance ON Delivery_Assignments(PartnerID, acceptanceTime)"
+    },
+    {
+      "applied": true,
+      "error": null,
+      "statement": "CREATE INDEX qb_idx_delivery_partner_deliverytime ON Delivery_Assignments(PartnerID, deliveryTime)"
+    },
+    {
+      "applied": true,
+      "error": null,
+      "statement": "CREATE INDEX qb_idx_menuitem_rest_disc_item ON MenuItem(restaurantID, discontinued, itemID)"
+    },
+    {
+      "applied": true,
+      "error": null,
+      "statement": "CREATE INDEX qb_idx_restaurant_active_name ON Restaurant(isDeleted, discontinued, name)"
+    },
+    {
+      "applied": false,
+      "error": {
+        "errno": 1061,
+        "msg": "1061 (42000): Duplicate key name 'qb_idx_payment_customer_for_time'",
+        "sqlstate": "42000"
+      },
+      "statement": "CREATE INDEX qb_idx_payment_customer_for_time ON Payment(customerID, paymentFor, transactionTime, paymentID)"
+    },
+    {
+      "applied": true,
+      "error": null,
+      "statement": "CREATE INDEX qb_idx_payment_for_status_type_time ON Payment(paymentFor, status, paymentType, transactionTime)"
+    },
+    {
+      "applied": true,
+      "error": null,
+      "statement": "CREATE INDEX qb_idx_address_customer_saved ON Address(customerID, isSaved, addressID)"
+    },
+    {
+      "applied": true,
+      "error": null,
+      "statement": "CREATE INDEX qb_idx_auditlog_timestamp ON AuditLog(timestamp, logID)"
+    }
+  ],
+  "before": {
+    "api": {
+      "auth": {
+        "Admin": {
+          "response": {
+            "data": {
+              "expiresAt": "2026-03-22T19:41:37.449453",
+              "member": {
+                "activeRole": "Admin",
+                "email": "aman.shah1@example.com",
+                "memberID": 1,
+                "name": "Aman Shah",
+                "roles": [
+                  "Admin"
+                ]
+              },
+              "token": "8bed7445a5f114a46604bc08577019e7b14ce5b27cbdb717ca537f9bcdb3b6f2"
+            },
+            "message": "Login successful"
+          },
+          "status": 200,
+          "tokenPresent": true
+        },
+        "Customer": {
+          "response": {
+            "data": {
+              "expiresAt": "2026-03-22T19:41:37.730137",
+              "member": {
+                "activeRole": "Customer",
+                "email": "riya.patel2@example.com",
+                "memberID": 2,
+                "name": "Riya Patel",
+                "roles": [
+                  "Customer"
+                ]
+              },
+              "token": "486c661b048c1b42edee4033280e13cca2a55be9afc0db65ab6ccf6c66dcde89"
+            },
+            "message": "Login successful"
+          },
+          "status": 200,
+          "tokenPresent": true
+        },
+        "DeliveryPartner": {
+          "response": {
+            "data": {
+              "expiresAt": "2026-03-22T19:41:37.999563",
+              "member": {
+                "activeRole": "DeliveryPartner",
+                "email": "driver1@example.com",
+                "memberID": 11,
+                "name": "Driver One",
+                "roles": [
+                  "DeliveryPartner"
+                ]
+              },
+              "token": "b74aed0fb9ac807adff4fb29c9650bfd6ab4ab80950318cd9c88bf46f3b810c3"
+            },
+            "message": "Login successful"
+          },
+          "status": 200,
+          "tokenPresent": true
+        }
+      },
+      "timings": {
+        "api_admin_audits": {
+          "method": "GET",
+          "path": "/api/admin/audits",
+          "role": "Admin",
+          "timing": {
+            "ms": {
+              "max": 33.788265000112006,
+              "mean": 28.117877520126058,
+              "min": 25.41912800006685,
+              "p50": 27.650534000713378,
+              "p95": 31.241559000591224
+            },
+            "runs": 25,
+            "statusCodes": {
+              "200": 25
+            },
+            "warmup": 5
+          }
+        },
+        "api_admin_overview": {
+          "method": "GET",
+          "path": "/api/admin/overview",
+          "role": "Admin",
+          "timing": {
+            "ms": {
+              "max": 42.54413900071086,
+              "mean": 32.523499480048486,
+              "min": 26.53412000017852,
+              "p50": 32.10675700029242,
+              "p95": 36.67395199954626
+            },
+            "runs": 25,
+            "statusCodes": {
+              "200": 25
+            },
+            "warmup": 5
+          }
+        },
+        "api_customer_cart": {
+          "method": "GET",
+          "path": "/api/customer/cart",
+          "role": "Customer",
+          "timing": {
+            "ms": {
+              "max": 36.24998499981302,
+              "mean": 29.223276279881247,
+              "min": 22.982675000093877,
+              "p50": 29.64514099949156,
+              "p95": 32.92386700013594
+            },
+            "runs": 25,
+            "statusCodes": {
+              "200": 25
+            },
+            "warmup": 5
+          }
+        },
+        "api_customer_last_payment": {
+          "method": "GET",
+          "path": "/api/customer/payments/last",
+          "role": "Customer",
+          "timing": {
+            "ms": {
+              "max": 31.753676000334963,
+              "mean": 26.96549451993633,
+              "min": 23.012234999441716,
+              "p50": 26.213183000436402,
+              "p95": 31.12482800042926
+            },
+            "runs": 25,
+            "statusCodes": {
+              "200": 25
+            },
+            "warmup": 5
+          }
+        },
+        "api_customer_orders": {
+          "method": "GET",
+          "path": "/api/customer/orders",
+          "role": "Customer",
+          "timing": {
+            "ms": {
+              "max": 36.008956999467046,
+              "mean": 27.19643956006621,
+              "min": 21.851893999155436,
+              "p50": 26.46076400014863,
+              "p95": 32.072336999590334
+            },
+            "runs": 25,
+            "statusCodes": {
+              "200": 25
+            },
+            "warmup": 5
+          }
+        },
+        "api_customer_profile_orders": {
+          "method": "GET",
+          "path": "/api/customer/profile/orders",
+          "role": "Customer",
+          "timing": {
+            "ms": {
+              "max": 34.35732399975677,
+              "mean": 29.047836679928878,
+              "min": 25.083682000513363,
+              "p50": 28.4741440000289,
+              "p95": 32.42087499984336
+            },
+            "runs": 25,
+            "statusCodes": {
+              "200": 25
+            },
+            "warmup": 5
+          }
+        },
+        "api_delivery_assignments": {
+          "method": "GET",
+          "path": "/api/delivery/assignments",
+          "role": "DeliveryPartner",
+          "timing": {
+            "ms": {
+              "max": 34.938230000079784,
+              "mean": 28.865656279995164,
+              "min": 23.65642899985687,
+              "p50": 28.025088000504184,
+              "p95": 32.76045799975691
+            },
+            "runs": 25,
+            "statusCodes": {
+              "200": 25
+            },
+            "warmup": 5
+          }
+        },
+        "api_delivery_completed_orders": {
+          "method": "GET",
+          "path": "/api/delivery/completed-orders",
+          "role": "DeliveryPartner",
+          "timing": {
+            "ms": {
+              "max": 41.80378000000928,
+              "mean": 31.04460224007198,
+              "min": 24.22541500072839,
+              "p50": 30.69319299993367,
+              "p95": 39.31125199960661
+            },
+            "runs": 25,
+            "statusCodes": {
+              "200": 25
+            },
+            "warmup": 5
+          }
+        },
+        "api_delivery_live_orders": {
+          "method": "GET",
+          "path": "/api/delivery/live-orders",
+          "role": "DeliveryPartner",
+          "timing": {
+            "ms": {
+              "max": 39.97748999972828,
+              "mean": 29.014659720087366,
+              "min": 24.853337999957148,
+              "p50": 28.578526000273996,
+              "p95": 33.088105999922846
+            },
+            "runs": 25,
+            "statusCodes": {
+              "200": 25
+            },
+            "warmup": 5
+          }
+        },
+        "api_menu_items": {
+          "method": "GET",
+          "path": "/api/menu-items?restaurantID=201",
+          "role": "Customer",
+          "timing": {
+            "ms": {
+              "max": 44.920235999597935,
+              "mean": 29.846829519919993,
+              "min": 23.14186300009169,
+              "p50": 27.58103399992251,
+              "p95": 36.959826000384055
+            },
+            "runs": 25,
+            "statusCodes": {
+              "200": 25
+            },
+            "warmup": 5
+          }
+        },
+        "api_menu_items_search": {
+          "method": "GET",
+          "path": "/api/menu-items?search=Paneer",
+          "role": "Customer",
+          "timing": {
+            "ms": {
+              "max": 37.843467999664426,
+              "mean": 27.6555623600143,
+              "min": 23.94323400039866,
+              "p50": 26.635309999619494,
+              "p95": 31.09798600053182
+            },
+            "runs": 25,
+            "statusCodes": {
+              "200": 25
+            },
+            "warmup": 5
+          }
+        },
+        "api_restaurant_orders": {
+          "method": "GET",
+          "path": "/api/restaurant/orders?restaurantID=201",
+          "role": "Admin",
+          "timing": {
+            "ms": {
+              "max": 34.12915500030067,
+              "mean": 28.694538280105917,
+              "min": 23.884003000603116,
+              "p50": 28.204547999848728,
+              "p95": 31.90294200067001
+            },
+            "runs": 25,
+            "statusCodes": {
+              "200": 25
+            },
+            "warmup": 5
+          }
+        },
+        "api_restaurants": {
+          "method": "GET",
+          "path": "/api/restaurants",
+          "role": "Customer",
+          "timing": {
+            "ms": {
+              "max": 34.40962000058789,
+              "mean": 27.163695319795806,
+              "min": 22.84457299992937,
+              "p50": 26.474885000425274,
+              "p95": 32.01015400009055
+            },
+            "runs": 25,
+            "statusCodes": {
+              "200": 25
+            },
+            "warmup": 5
+          }
+        }
+      }
+    },
+    "queries": {
+      "explain": {
+        "admin_audits": [
+          {
+            "Extra": "Using filesort",
+            "filtered": 100.0,
+            "id": 1,
+            "key": null,
+            "key_len": null,
+            "partitions": null,
+            "possible_keys": null,
+            "ref": null,
+            "rows": 2,
+            "select_type": "SIMPLE",
+            "table": "AuditLog",
+            "type": "ALL"
+          }
+        ],
+        "admin_overview_recent": [
+          {
+            "Extra": "Using filesort",
+            "filtered": 100.0,
+            "id": 1,
+            "key": null,
+            "key_len": null,
+            "partitions": null,
+            "possible_keys": null,
+            "ref": null,
+            "rows": 12,
+            "select_type": "SIMPLE",
+            "table": "o",
+            "type": "ALL"
+          },
+          {
+            "Extra": null,
+            "filtered": 100.0,
+            "id": 1,
+            "key": "PRIMARY",
+            "key_len": "4",
+            "partitions": null,
+            "possible_keys": "PRIMARY",
+            "ref": "QB.o.restaurantID",
+            "rows": 1,
+            "select_type": "SIMPLE",
+            "table": "r",
+            "type": "eq_ref"
+          },
+          {
+            "Extra": null,
+            "filtered": 100.0,
+            "id": 1,
+            "key": "PRIMARY",
+            "key_len": "4",
+            "partitions": null,
+            "possible_keys": "PRIMARY",
+            "ref": "QB.o.paymentID",
+            "rows": 1,
+            "select_type": "SIMPLE",
+            "table": "p",
+            "type": "eq_ref"
+          }
+        ],
+        "customer_addresses": [
+          {
+            "Extra": null,
+            "filtered": 100.0,
+            "id": 1,
+            "key": "PRIMARY",
+            "key_len": "4",
+            "partitions": null,
+            "possible_keys": "PRIMARY",
+            "ref": "const",
+            "rows": 2,
+            "select_type": "SIMPLE",
+            "table": "Address",
+            "type": "ref"
+          }
+        ],
+        "customer_cart": [
+          {
+            "Extra": "Using where; Using temporary; Using filesort",
+            "filtered": 10.0,
+            "id": 1,
+            "key": null,
+            "key_len": null,
+            "partitions": null,
+            "possible_keys": "PRIMARY",
+            "ref": null,
+            "rows": 10,
+            "select_type": "SIMPLE",
+            "table": "r",
+            "type": "ALL"
+          },
+          {
+            "Extra": "Using where",
+            "filtered": 10.0,
+            "id": 1,
+            "key": "PRIMARY",
+            "key_len": "4",
+            "partitions": null,
+            "possible_keys": "PRIMARY",
+            "ref": "QB.r.restaurantID",
+            "rows": 2,
+            "select_type": "SIMPLE",
+            "table": "mi",
+            "type": "ref"
+          },
+          {
+            "Extra": null,
+            "filtered": 100.0,
+            "id": 1,
+            "key": "PRIMARY",
+            "key_len": "12",
+            "partitions": null,
+            "possible_keys": "PRIMARY,restaurantID",
+            "ref": "const,QB.r.restaurantID,QB.mi.itemID",
+            "rows": 1,
+            "select_type": "SIMPLE",
+            "table": "ci",
+            "type": "eq_ref"
+          }
+        ],
+        "customer_item_reviews": [
+          {
+            "Extra": "Using temporary; Using filesort",
+            "filtered": 100.0,
+            "id": 1,
+            "key": "customerID",
+            "key_len": "4",
+            "partitions": null,
+            "possible_keys": "PRIMARY,customerID",
+            "ref": "const",
+            "rows": 2,
+            "select_type": "SIMPLE",
+            "table": "o",
+            "type": "ref"
+          },
+          {
+            "Extra": null,
+            "filtered": 100.0,
+            "id": 1,
+            "key": "qb_idx_menuitemrating_order",
+            "key_len": "4",
+            "partitions": null,
+            "possible_keys": "PRIMARY,qb_idx_menuitemrating_order",
+            "ref": "QB.o.orderID",
+            "rows": 1,
+            "select_type": "SIMPLE",
+            "table": "mir",
+            "type": "ref"
+          },
+          {
+            "Extra": null,
+            "filtered": 100.0,
+            "id": 1,
+            "key": "PRIMARY",
+            "key_len": "4",
+            "partitions": null,
+            "possible_keys": "PRIMARY",
+            "ref": "QB.mir.restaurantID",
+            "rows": 1,
+            "select_type": "SIMPLE",
+            "table": "r",
+            "type": "eq_ref"
+          },
+          {
+            "Extra": null,
+            "filtered": 100.0,
+            "id": 1,
+            "key": "PRIMARY",
+            "key_len": "8",
+            "partitions": null,
+            "possible_keys": "PRIMARY",
+            "ref": "QB.mir.restaurantID,QB.mir.itemID",
+            "rows": 1,
+            "select_type": "SIMPLE",
+            "table": "mi",
+            "type": "eq_ref"
+          }
+        ],
+        "customer_last_payment": [
+          {
+            "Extra": "Backward index scan",
+            "filtered": 100.0,
+            "id": 1,
+            "key": "qb_idx_payment_customer_for_time",
+            "key_len": "46",
+            "partitions": null,
+            "possible_keys": "qb_idx_payment_customer_for_time,qb_idx_payment_for_status_time",
+            "ref": "const,const",
+            "rows": 2,
+            "select_type": "SIMPLE",
+            "table": "Payment",
+            "type": "ref"
+          }
+        ],
+        "customer_order_reviews": [
+          {
+            "Extra": "Using filesort",
+            "filtered": 100.0,
+            "id": 1,
+            "key": "customerID",
+            "key_len": "4",
+            "partitions": null,
+            "possible_keys": "PRIMARY,customerID,qb_idx_orders_restaurant_time",
+            "ref": "const",
+            "rows": 2,
+            "select_type": "SIMPLE",
+            "table": "o",
+            "type": "ref"
+          },
+          {
+            "Extra": null,
+            "filtered": 100.0,
+            "id": 1,
+            "key": "PRIMARY",
+            "key_len": "4",
+            "partitions": null,
+            "possible_keys": "PRIMARY",
+            "ref": "QB.o.restaurantID",
+            "rows": 1,
+            "select_type": "SIMPLE",
+            "table": "r",
+            "type": "eq_ref"
+          },
+          {
+            "Extra": null,
+            "filtered": 100.0,
+            "id": 1,
+            "key": "PRIMARY",
+            "key_len": "4",
+            "partitions": null,
+            "possible_keys": "PRIMARY",
+            "ref": "QB.o.orderID",
+            "rows": 1,
+            "select_type": "SIMPLE",
+            "table": "orr",
+            "type": "eq_ref"
+          }
+        ],
+        "customer_orders_list": [
+          {
+            "Extra": "Using filesort",
+            "filtered": 100.0,
+            "id": 1,
+            "key": "customerID",
+            "key_len": "4",
+            "partitions": null,
+            "possible_keys": "customerID,qb_idx_orders_restaurant_time",
+            "ref": "const",
+            "rows": 2,
+            "select_type": "SIMPLE",
+            "table": "o",
+            "type": "ref"
+          },
+          {
+            "Extra": null,
+            "filtered": 100.0,
+            "id": 1,
+            "key": "PRIMARY",
+            "key_len": "4",
+            "partitions": null,
+            "possible_keys": "PRIMARY",
+            "ref": "QB.o.restaurantID",
+            "rows": 1,
+            "select_type": "SIMPLE",
+            "table": "r",
+            "type": "eq_ref"
+          },
+          {
+            "Extra": null,
+            "filtered": 100.0,
+            "id": 1,
+            "key": "PRIMARY",
+            "key_len": "4",
+            "partitions": null,
+            "possible_keys": "PRIMARY",
+            "ref": "QB.o.paymentID",
+            "rows": 1,
+            "select_type": "SIMPLE",
+            "table": "p",
+            "type": "eq_ref"
+          }
+        ],
+        "customer_profile_orders": [
+          {
+            "Extra": "Using filesort",
+            "filtered": 100.0,
+            "id": 1,
+            "key": "customerID",
+            "key_len": "4",
+            "partitions": null,
+            "possible_keys": "customerID,qb_idx_orders_restaurant_time",
+            "ref": "const",
+            "rows": 2,
+            "select_type": "SIMPLE",
+            "table": "o",
+            "type": "ref"
+          },
+          {
+            "Extra": null,
+            "filtered": 100.0,
+            "id": 1,
+            "key": "PRIMARY",
+            "key_len": "8",
+            "partitions": null,
+            "possible_keys": "PRIMARY",
+            "ref": "const,QB.o.addressID",
+            "rows": 1,
+            "select_type": "SIMPLE",
+            "table": "a",
+            "type": "eq_ref"
+          },
+          {
+            "Extra": null,
+            "filtered": 100.0,
+            "id": 1,
+            "key": "PRIMARY",
+            "key_len": "4",
+            "partitions": null,
+            "possible_keys": "PRIMARY",
+            "ref": "QB.o.restaurantID",
+            "rows": 1,
+            "select_type": "SIMPLE",
+            "table": "r",
+            "type": "eq_ref"
+          },
+          {
+            "Extra": null,
+            "filtered": 100.0,
+            "id": 1,
+            "key": "PRIMARY",
+            "key_len": "4",
+            "partitions": null,
+            "possible_keys": "PRIMARY",
+            "ref": "QB.o.paymentID",
+            "rows": 1,
+            "select_type": "SIMPLE",
+            "table": "p",
+            "type": "eq_ref"
+          },
+          {
+            "Extra": null,
+            "filtered": 100.0,
+            "id": 1,
+            "key": "PRIMARY",
+            "key_len": "4",
+            "partitions": null,
+            "possible_keys": "PRIMARY",
+            "ref": "QB.o.orderID",
+            "rows": 1,
+            "select_type": "SIMPLE",
+            "table": "orr",
+            "type": "eq_ref"
+          },
+          {
+            "Extra": null,
+            "filtered": 100.0,
+            "id": 1,
+            "key": "qb_idx_delivery_order",
+            "key_len": "4",
+            "partitions": null,
+            "possible_keys": "qb_idx_delivery_order",
+            "ref": "QB.o.orderID",
+            "rows": 1,
+            "select_type": "SIMPLE",
+            "table": "da",
+            "type": "ref"
+          },
+          {
+            "Extra": null,
+            "filtered": 100.0,
+            "id": 1,
+            "key": "PRIMARY",
+            "key_len": "4",
+            "partitions": null,
+            "possible_keys": "PRIMARY",
+            "ref": "QB.da.PartnerID",
+            "rows": 1,
+            "select_type": "SIMPLE",
+            "table": "dp",
+            "type": "eq_ref"
+          },
+          {
+            "Extra": null,
+            "filtered": 100.0,
+            "id": 1,
+            "key": "PRIMARY",
+            "key_len": "4",
+            "partitions": null,
+            "possible_keys": "PRIMARY",
+            "ref": "QB.da.PartnerID",
+            "rows": 1,
+            "select_type": "SIMPLE",
+            "table": "dpm",
+            "type": "eq_ref"
+          }
+        ],
+        "delivery_assignments": [
+          {
+            "Extra": "Backward index scan",
+            "filtered": 100.0,
+            "id": 1,
+            "key": "qb_idx_delivery_partner_acceptance",
+            "key_len": "4",
+            "partitions": null,
+            "possible_keys": "qb_idx_delivery_partner_acceptance,qb_idx_delivery_order",
+            "ref": "const",
+            "rows": 2,
+            "select_type": "SIMPLE",
+            "table": "da",
+            "type": "ref"
+          },
+          {
+            "Extra": null,
+            "filtered": 100.0,
+            "id": 1,
+            "key": "PRIMARY",
+            "key_len": "4",
+            "partitions": null,
+            "possible_keys": "PRIMARY,qb_idx_orders_restaurant_time",
+            "ref": "QB.da.OrderID",
+            "rows": 1,
+            "select_type": "SIMPLE",
+            "table": "o",
+            "type": "eq_ref"
+          },
+          {
+            "Extra": null,
+            "filtered": 100.0,
+            "id": 1,
+            "key": "PRIMARY",
+            "key_len": "4",
+            "partitions": null,
+            "possible_keys": "PRIMARY",
+            "ref": "QB.o.restaurantID",
+            "rows": 1,
+            "select_type": "SIMPLE",
+            "table": "r",
+            "type": "eq_ref"
+          }
+        ],
+        "delivery_completed_orders": [
+          {
+            "Extra": "Using filesort",
+            "filtered": 100.0,
+            "id": 1,
+            "key": "qb_idx_delivery_partner_acceptance",
+            "key_len": "4",
+            "partitions": null,
+            "possible_keys": "qb_idx_delivery_partner_acceptance,qb_idx_delivery_order",
+            "ref": "const",
+            "rows": 2,
+            "select_type": "SIMPLE",
+            "table": "da",
+            "type": "ref"
+          },
+          {
+            "Extra": "Using where",
+            "filtered": 10.0,
+            "id": 1,
+            "key": "PRIMARY",
+            "key_len": "4",
+            "partitions": null,
+            "possible_keys": "PRIMARY,customerID,qb_idx_orders_restaurant_time",
+            "ref": "QB.da.OrderID",
+            "rows": 1,
+            "select_type": "SIMPLE",
+            "table": "o",
+            "type": "eq_ref"
+          },
+          {
+            "Extra": null,
+            "filtered": 100.0,
+            "id": 1,
+            "key": "PRIMARY",
+            "key_len": "4",
+            "partitions": null,
+            "possible_keys": "PRIMARY",
+            "ref": "QB.o.restaurantID",
+            "rows": 1,
+            "select_type": "SIMPLE",
+            "table": "r",
+            "type": "eq_ref"
+          },
+          {
+            "Extra": null,
+            "filtered": 100.0,
+            "id": 1,
+            "key": "PRIMARY",
+            "key_len": "4",
+            "partitions": null,
+            "possible_keys": "PRIMARY",
+            "ref": "QB.o.customerID",
+            "rows": 1,
+            "select_type": "SIMPLE",
+            "table": "m",
+            "type": "eq_ref"
+          }
+        ],
+        "delivery_live_orders": [
+          {
+            "Extra": "Using where; Using filesort",
+            "filtered": 30.0,
+            "id": 1,
+            "key": null,
+            "key_len": null,
+            "partitions": null,
+            "possible_keys": "customerID,qb_idx_orders_restaurant_time",
+            "ref": null,
+            "rows": 12,
+            "select_type": "SIMPLE",
+            "table": "o",
+            "type": "ALL"
+          },
+          {
+            "Extra": null,
+            "filtered": 100.0,
+            "id": 1,
+            "key": "PRIMARY",
+            "key_len": "4",
+            "partitions": null,
+            "possible_keys": "PRIMARY",
+            "ref": "QB.o.restaurantID",
+            "rows": 1,
+            "select_type": "SIMPLE",
+            "table": "r",
+            "type": "eq_ref"
+          },
+          {
+            "Extra": "Using where; Not exists; Using index",
+            "filtered": 100.0,
+            "id": 1,
+            "key": "qb_idx_delivery_order",
+            "key_len": "4",
+            "partitions": null,
+            "possible_keys": "qb_idx_delivery_order",
+            "ref": "QB.o.orderID",
+            "rows": 1,
+            "select_type": "SIMPLE",
+            "table": "da",
+            "type": "ref"
+          },
+          {
+            "Extra": null,
+            "filtered": 100.0,
+            "id": 1,
+            "key": "PRIMARY",
+            "key_len": "8",
+            "partitions": null,
+            "possible_keys": "PRIMARY",
+            "ref": "QB.o.customerID,QB.o.addressID",
+            "rows": 1,
+            "select_type": "SIMPLE",
+            "table": "a",
+            "type": "eq_ref"
+          },
+          {
+            "Extra": null,
+            "filtered": 100.0,
+            "id": 1,
+            "key": "PRIMARY",
+            "key_len": "4",
+            "partitions": null,
+            "possible_keys": "PRIMARY",
+            "ref": "QB.o.customerID",
+            "rows": 1,
+            "select_type": "SIMPLE",
+            "table": "m",
+            "type": "eq_ref"
+          }
+        ],
+        "expire_pending_payments": [
+          {
+            "Extra": "Using index condition; Using where",
+            "filtered": 10.0,
+            "id": 1,
+            "key": "qb_idx_payment_for_status_time",
+            "key_len": "77",
+            "partitions": null,
+            "possible_keys": "qb_idx_payment_for_status_time",
+            "ref": null,
+            "rows": 1,
+            "select_type": "SIMPLE",
+            "table": "Payment",
+            "type": "range"
+          }
+        ],
+        "menu_items_by_restaurant": [
+          {
+            "Extra": null,
+            "filtered": 100.0,
+            "id": 1,
+            "key": "PRIMARY",
+            "key_len": "4",
+            "partitions": null,
+            "possible_keys": "PRIMARY",
+            "ref": "const",
+            "rows": 1,
+            "select_type": "SIMPLE",
+            "table": "r",
+            "type": "const"
+          },
+          {
+            "Extra": "Using where",
+            "filtered": 10.0,
+            "id": 1,
+            "key": "PRIMARY",
+            "key_len": "4",
+            "partitions": null,
+            "possible_keys": "PRIMARY",
+            "ref": "const",
+            "rows": 2,
+            "select_type": "SIMPLE",
+            "table": "mi",
+            "type": "ref"
+          }
+        ],
+        "menu_items_search": [
+          {
+            "Extra": "Using where; Using temporary; Using filesort",
+            "filtered": 10.0,
+            "id": 1,
+            "key": null,
+            "key_len": null,
+            "partitions": null,
+            "possible_keys": "PRIMARY",
+            "ref": null,
+            "rows": 10,
+            "select_type": "SIMPLE",
+            "table": "r",
+            "type": "ALL"
+          },
+          {
+            "Extra": "Using where",
+            "filtered": 5.0,
+            "id": 1,
+            "key": "PRIMARY",
+            "key_len": "4",
+            "partitions": null,
+            "possible_keys": "PRIMARY",
+            "ref": "QB.r.restaurantID",
+            "rows": 2,
+            "select_type": "SIMPLE",
+            "table": "mi",
+            "type": "ref"
+          }
+        ],
+        "restaurant_orders_list": [
+          {
+            "Extra": "Backward index scan",
+            "filtered": 100.0,
+            "id": 1,
+            "key": "qb_idx_orders_restaurant_time",
+            "key_len": "4",
+            "partitions": null,
+            "possible_keys": "qb_idx_orders_restaurant_time",
+            "ref": "const",
+            "rows": 1,
+            "select_type": "SIMPLE",
+            "table": "o",
+            "type": "ref"
+          },
+          {
+            "Extra": null,
+            "filtered": 100.0,
+            "id": 1,
+            "key": "PRIMARY",
+            "key_len": "4",
+            "partitions": null,
+            "possible_keys": "PRIMARY",
+            "ref": "QB.o.paymentID",
+            "rows": 1,
+            "select_type": "SIMPLE",
+            "table": "p",
+            "type": "eq_ref"
+          },
+          {
+            "Extra": null,
+            "filtered": 100.0,
+            "id": 1,
+            "key": "qb_idx_delivery_order",
+            "key_len": "4",
+            "partitions": null,
+            "possible_keys": "qb_idx_delivery_order",
+            "ref": "QB.o.orderID",
+            "rows": 1,
+            "select_type": "SIMPLE",
+            "table": "da",
+            "type": "ref"
+          }
+        ],
+        "restaurants_list": [
+          {
+            "Extra": "Using where; Using filesort",
+            "filtered": 10.0,
+            "id": 1,
+            "key": null,
+            "key_len": null,
+            "partitions": null,
+            "possible_keys": null,
+            "ref": null,
+            "rows": 10,
+            "select_type": "SIMPLE",
+            "table": "Restaurant",
+            "type": "ALL"
+          }
+        ],
+        "saved_address_lookup": [
+          {
+            "Extra": "Using where",
+            "filtered": 10.0,
+            "id": 1,
+            "key": "PRIMARY",
+            "key_len": "4",
+            "partitions": null,
+            "possible_keys": "PRIMARY",
+            "ref": "const",
+            "rows": 2,
+            "select_type": "SIMPLE",
+            "table": "Address",
+            "type": "ref"
+          }
+        ]
+      },
+      "timings": {
+        "admin_audits": {
+          "ms": {
+            "max": 0.38496100023621693,
+            "mean": 0.2592596000249614,
+            "min": 0.1848599995355471,
+            "p50": 0.2522980003050179,
+            "p95": 0.34447500001988374
+          },
+          "runs": 25,
+          "warmup": 5
+        },
+        "admin_overview_recent": {
+          "ms": {
+            "max": 0.4592590003085206,
+            "mean": 0.3053281199390767,
+            "min": 0.2259799994135392,
+            "p50": 0.28979600028833374,
+            "p95": 0.4123310000068159
+          },
+          "runs": 25,
+          "warmup": 5
+        },
+        "customer_addresses": {
+          "ms": {
+            "max": 0.3986550000263378,
+            "mean": 0.26871800007938873,
+            "min": 0.21056500008853618,
+            "p50": 0.25479499981884146,
+            "p95": 0.3607850003390922
+          },
+          "runs": 25,
+          "warmup": 5
+        },
+        "customer_cart": {
+          "ms": {
+            "max": 0.6932690002940944,
+            "mean": 0.3403624800921534,
+            "min": 0.19832399993902072,
+            "p50": 0.321425000038289,
+            "p95": 0.4982010004823678
+          },
+          "runs": 25,
+          "warmup": 5
+        },
+        "customer_item_reviews": {
+          "ms": {
+            "max": 0.8951350000643288,
+            "mean": 0.4500043999723857,
+            "min": 0.2486180001142202,
+            "p50": 0.4223020005156286,
+            "p95": 0.6148860002213041
+          },
+          "runs": 25,
+          "warmup": 5
+        },
+        "customer_last_payment": {
+          "ms": {
+            "max": 0.39201800063892733,
+            "mean": 0.2693357200769242,
+            "min": 0.19955900006607408,
+            "p50": 0.2594190000309027,
+            "p95": 0.3339949998917291
+          },
+          "runs": 25,
+          "warmup": 5
+        },
+        "customer_order_reviews": {
+          "ms": {
+            "max": 0.3787710002143285,
+            "mean": 0.24262384002213366,
+            "min": 0.18256499970448203,
+            "p50": 0.21918499987805262,
+            "p95": 0.3404219996809843
+          },
+          "runs": 25,
+          "warmup": 5
+        },
+        "customer_orders_list": {
+          "ms": {
+            "max": 0.523914000041259,
+            "mean": 0.3356431999782217,
+            "min": 0.21222399936959846,
+            "p50": 0.3370219992575585,
+            "p95": 0.4057559999637306
+          },
+          "runs": 25,
+          "warmup": 5
+        },
+        "customer_profile_orders": {
+          "ms": {
+            "max": 0.5290959998092148,
+            "mean": 0.34392124001897173,
+            "min": 0.2762530002655694,
+            "p50": 0.32695499976398423,
+            "p95": 0.41594699996494455
+          },
+          "runs": 25,
+          "warmup": 5
+        },
+        "delivery_assignments": {
+          "ms": {
+            "max": 0.5383979996622656,
+            "mean": 0.29805163998389617,
+            "min": 0.21713899968744954,
+            "p50": 0.2893150003728806,
+            "p95": 0.36127000021224376
+          },
+          "runs": 25,
+          "warmup": 5
+        },
+        "delivery_completed_orders": {
+          "ms": {
+            "max": 0.5799050004497985,
+            "mean": 0.41731212004378904,
+            "min": 0.2625899996928638,
+            "p50": 0.3957640001317486,
+            "p95": 0.5570619996433379
+          },
+          "runs": 25,
+          "warmup": 5
+        },
+        "delivery_live_orders": {
+          "ms": {
+            "max": 0.43019099939556327,
+            "mean": 0.31162319999566535,
+            "min": 0.24830099937389605,
+            "p50": 0.3007949999300763,
+            "p95": 0.35132599987264257
+          },
+          "runs": 25,
+          "warmup": 5
+        },
+        "expire_pending_payments": {
+          "ms": {
+            "max": 0.4918040003758506,
+            "mean": 0.2653452000959078,
+            "min": 0.16542400044272654,
+            "p50": 0.24105600004986627,
+            "p95": 0.40704200000618584
+          },
+          "runs": 25,
+          "warmup": 5
+        },
+        "menu_items_by_restaurant": {
+          "ms": {
+            "max": 1.3371300001381314,
+            "mean": 0.5599440799051081,
+            "min": 0.3769020004256163,
+            "p50": 0.4967260001649265,
+            "p95": 0.8130389996949816
+          },
+          "runs": 25,
+          "warmup": 5
+        },
+        "menu_items_search": {
+          "ms": {
+            "max": 1.4575570003216853,
+            "mean": 0.466063479980221,
+            "min": 0.2953990006062668,
+            "p50": 0.4002700006822124,
+            "p95": 0.6290689998422749
+          },
+          "runs": 25,
+          "warmup": 5
+        },
+        "restaurant_orders_list": {
+          "ms": {
+            "max": 0.4886269998678472,
+            "mean": 0.2933047600163263,
+            "min": 0.23012500059849117,
+            "p50": 0.256803999945987,
+            "p95": 0.45423900064633926
+          },
+          "runs": 25,
+          "warmup": 5
+        },
+        "restaurants_list": {
+          "ms": {
+            "max": 0.41973199950007256,
+            "mean": 0.2470146799896611,
+            "min": 0.19331600014993455,
+            "p50": 0.22666199947707355,
+            "p95": 0.3299909994893824
+          },
+          "runs": 25,
+          "warmup": 5
+        },
+        "saved_address_lookup": {
+          "ms": {
+            "max": 0.3329660003146273,
+            "mean": 0.2260020000539953,
+            "min": 0.1396769994244096,
+            "p50": 0.23030900047160685,
+            "p95": 0.29745700066996505
+          },
+          "runs": 25,
+          "warmup": 5
+        }
+      }
+    }
+  },
+  "drop": [
+    {
+      "dropped": true,
+      "error": null,
+      "index": "qb_idx_orders_customer_time",
+      "table": "Orders"
+    },
+    {
+      "dropped": false,
+      "error": {
+        "errno": 1553,
+        "msg": "1553 (HY000): Cannot drop index 'qb_idx_orders_restaurant_time': needed in a foreign key constraint",
+        "sqlstate": "HY000"
+      },
+      "index": "qb_idx_orders_restaurant_time",
+      "table": "Orders"
+    },
+    {
+      "dropped": true,
+      "error": null,
+      "index": "qb_idx_orders_status_time",
+      "table": "Orders"
+    },
+    {
+      "dropped": false,
+      "error": {
+        "errno": 1553,
+        "msg": "1553 (HY000): Cannot drop index 'qb_idx_delivery_partner_acceptance': needed in a foreign key constraint",
+        "sqlstate": "HY000"
+      },
+      "index": "qb_idx_delivery_partner_acceptance",
+      "table": "Delivery_Assignments"
+    },
+    {
+      "dropped": false,
+      "error": {
+        "errno": 1091,
+        "msg": "1091 (42000): Can't DROP 'qb_idx_delivery_partner_deliverytime'; check that column/key exists",
+        "sqlstate": "42000"
+      },
+      "index": "qb_idx_delivery_partner_deliverytime",
+      "table": "Delivery_Assignments"
+    },
+    {
+      "dropped": true,
+      "error": null,
+      "index": "qb_idx_menuitem_rest_disc_item",
+      "table": "MenuItem"
+    },
+    {
+      "dropped": true,
+      "error": null,
+      "index": "qb_idx_restaurant_active_name",
+      "table": "Restaurant"
+    },
+    {
+      "dropped": false,
+      "error": {
+        "errno": 1553,
+        "msg": "1553 (HY000): Cannot drop index 'qb_idx_payment_customer_for_time': needed in a foreign key constraint",
+        "sqlstate": "HY000"
+      },
+      "index": "qb_idx_payment_customer_for_time",
+      "table": "Payment"
+    },
+    {
+      "dropped": false,
+      "error": {
+        "errno": 1091,
+        "msg": "1091 (42000): Can't DROP 'qb_idx_payment_for_status_type_time'; check that column/key exists",
+        "sqlstate": "42000"
+      },
+      "index": "qb_idx_payment_for_status_type_time",
+      "table": "Payment"
+    },
+    {
+      "dropped": true,
+      "error": null,
+      "index": "qb_idx_address_customer_saved",
+      "table": "Address"
+    },
+    {
+      "dropped": false,
+      "error": {
+        "errno": 1091,
+        "msg": "1091 (42000): Can't DROP 'qb_idx_auditlog_timestamp'; check that column/key exists",
+        "sqlstate": "42000"
+      },
+      "index": "qb_idx_auditlog_timestamp",
+      "table": "AuditLog"
+    }
+  ],
+  "meta": {
+    "db": {
+      "database": "QB",
+      "host": "127.0.0.1",
+      "port": 3306,
+      "user": "qb_admin"
+    },
+    "indexes": [
+      {
+        "name": "qb_idx_orders_customer_time",
+        "table": "Orders"
+      },
+      {
+        "name": "qb_idx_orders_restaurant_time",
+        "table": "Orders"
+      },
+      {
+        "name": "qb_idx_orders_status_time",
+        "table": "Orders"
+      },
+      {
+        "name": "qb_idx_delivery_partner_acceptance",
+        "table": "Delivery_Assignments"
+      },
+      {
+        "name": "qb_idx_delivery_partner_deliverytime",
+        "table": "Delivery_Assignments"
+      },
+      {
+        "name": "qb_idx_menuitem_rest_disc_item",
+        "table": "MenuItem"
+      },
+      {
+        "name": "qb_idx_restaurant_active_name",
+        "table": "Restaurant"
+      },
+      {
+        "name": "qb_idx_payment_customer_for_time",
+        "table": "Payment"
+      },
+      {
+        "name": "qb_idx_payment_for_status_type_time",
+        "table": "Payment"
+      },
+      {
+        "name": "qb_idx_address_customer_saved",
+        "table": "Address"
+      },
+      {
+        "name": "qb_idx_auditlog_timestamp",
+        "table": "AuditLog"
+      }
+    ],
+    "runs": 25,
+    "sampleIDs": {
+      "customerID": 1,
+      "partnerID": 11,
+      "restaurantID": 201
+    },
+    "timestamp": "2026-03-22T06:11:36+00:00",
+    "warmup": 5
+  }
+}
