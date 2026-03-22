@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>QuickBites | Admin Dashboard</title>
+    <link rel="stylesheet" href="/static/css/admin.css" />
+</head>
+<body class="admin-body">
+    <header class="admin-nav-shell">
+        <nav class="admin-nav">
+            <a href="/admin/dashboard" class="brand-mark">
+                <span class="brand-kicker">QuickBites</span>
+                <strong>Admin Control</strong>
+            </a>
+            <div class="admin-nav-links">
+                <a href="#" data-tab="overview">Overview</a>
+                <a href="#" data-tab="customers">Customers</a>
+                <a href="#" data-tab="restaurants">Restaurants</a>
+                <a href="#" data-tab="delivery">Delivery</a>
+                <a href="#" data-tab="audits">Audits</a>
+            </div>
+            <div class="admin-nav-actions">
+                <span id="admin-user-chip" class="user-chip">Admin</span>
+                <button id="admin-refresh-btn" class="btn-secondary" type="button">Refresh</button>
+                <button id="admin-logout-btn" class="btn-danger" type="button">Logout</button>
+            </div>
+        </nav>
+    </header>
+
+    <main class="admin-page">
+        <section class="admin-hero card">
+            <p class="hero-eyebrow">Unified Operations</p>
+            <h1 id="admin-hero-name">Admin Dashboard</h1>
+            <p class="hero-subtext" id="admin-hero-email">-</p>
+        </section>
+
+        <!-- OVERVIEW TAB -->
+        <section id="tab-overview" class="tab-pane active">
+            <div class="metric-grid">
+                <div class="card"><p>Members</p><h3 id="count-members">0</h3></div>
+                <div class="card"><p>Customers</p><h3 id="count-customers">0</h3></div>
+                <div class="card"><p>Restaurants</p><h3 id="count-restaurants">0</h3></div>
+                <div class="card"><p>Delivery Partners</p><h3 id="count-delivery">0</h3></div>
+                <div class="card"><p>Orders</p><h3 id="count-orders">0</h3></div>
+                <div class="card"><p>Payments</p><h3 id="count-payments">0</h3></div>
+            </div>
+
+            <div class="card">
+                <div class="section-title-row">
+                    <h2>Recent Orders</h2>
+                    <div class="search-box">
+                        <input id="overview-search-input" type="text" placeholder="Search by customer, restaurant, or partner..." />
+                        <button id="overview-search-btn" type="button">Search</button>
+                    </div>
+                </div>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Order ID</th>
+                                <th>Status</th>
+                                <th>Customer</th>
+                                <th>Restaurant</th>
+                                <th>Partner</th>
+                                <th>Amount</th>
+                                <th>Time</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="overview-orders-body"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- CUSTOMERS TAB -->
+        <section id="tab-customers" class="tab-pane">
+            <div class="card">
+                <div class="section-title-row">
+                    <h2>Customers</h2>
+                    <button id="load-customers-btn" type="button">Load Customers</button>
+                </div>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Name</th>
+                                <th>Email</th>
+                                <th>Phone</th>
+                                <th>Orders</th>
+                                <th>Status</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="customers-table-body"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- RESTAURANTS TAB -->
+        <section id="tab-restaurants" class="tab-pane">
+            <div class="card">
+                <div class="section-title-row">
+                    <h2>Restaurants</h2>
+                    <button id="load-restaurants-btn" type="button">Load Restaurants</button>
+                </div>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Name</th>
+                                <th>City</th>
+                                <th>Status</th>
+                                <th>Verified</th>
+                                <th>Rating</th>
+                                <th>Record</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="restaurants-table-body"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- DELIVERY PARTNERS TAB -->
+        <section id="tab-delivery" class="tab-pane">
+            <div class="card">
+                <div class="section-title-row">
+                    <h2>Delivery Partners</h2>
+                    <button id="load-delivery-partners-btn" type="button">Load Partners</button>
+                </div>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Name</th>
+                                <th>Phone</th>
+                                <th>Online</th>
+                                <th>Deliveries</th>
+                                <th>Rating</th>
+                                <th>Record</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="delivery-partners-table-body"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- AUDITS TAB -->
+        <section id="tab-audits" class="tab-pane">
+            <div class="card">
+                <div class="section-title-row">
+                    <h2>Audit Logs</h2>
+                    <button id="refresh-audits-btn" type="button">Refresh Audits</button>
+                </div>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Time</th>
+                                <th>Member</th>
+                                <th>Action</th>
+                                <th>Table</th>
+                                <th>Record</th>
+                                <th>Method</th>
+                                <th>Path</th>
+                                <th>Details</th>
+                            </tr>
+                        </thead>
+                        <tbody id="audits-table-body"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- ORDER DETAIL MODAL -->
+    <div id="order-detail-modal" class="modal" data-modal-key="order">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Order Details</h2>
+                <button class="modal-close-btn" type="button">&times;</button>
+            </div>
+            <div id="order-detail-body"></div>
+            <div class="modal-actions">
+                <button class="btn-secondary" onclick="closeModal('order')" type="button">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- CUSTOMER DETAIL MODAL -->
+    <div id="customer-detail-modal" class="modal" data-modal-key="customer">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Customer Details</h2>
+                <button class="modal-close-btn" type="button">&times;</button>
+            </div>
+            <div id="customer-detail-body"></div>
+            <div class="modal-actions">
+                <button id="customer-edit-btn" type="button">Edit</button>
+                <button id="customer-delete-btn" class="btn-danger" type="button">Delete</button>
+                <button id="customer-restore-btn" class="btn-secondary" type="button" style="display:none;">Restore</button>
+                <button class="btn-secondary" onclick="closeModal('customer')" type="button">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- RESTAURANT DETAIL MODAL -->
+    <div id="restaurant-detail-modal" class="modal" data-modal-key="restaurant">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Restaurant Details</h2>
+                <button class="modal-close-btn" type="button">&times;</button>
+            </div>
+            <div id="restaurant-detail-body"></div>
+            <div class="modal-actions">
+                <button id="restaurant-edit-btn" type="button">Edit</button>
+                <button id="restaurant-delete-btn" class="btn-danger" type="button">Delete</button>
+                <button id="restaurant-restore-btn" class="btn-secondary" type="button" style="display:none;">Restore</button>
+                <button class="btn-secondary" onclick="closeModal('restaurant')" type="button">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- DELIVERY PARTNER DETAIL MODAL -->
+    <div id="delivery-detail-modal" class="modal" data-modal-key="delivery">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Delivery Partner Details</h2>
+                <button class="modal-close-btn" type="button">&times;</button>
+            </div>
+            <div id="delivery-detail-body"></div>
+            <div class="modal-actions">
+                <button id="delivery-edit-btn" type="button">Edit</button>
+                <button id="delivery-delete-btn" class="btn-danger" type="button">Delete</button>
+                <button id="delivery-restore-btn" class="btn-secondary" type="button" style="display:none;">Restore</button>
+                <button class="btn-secondary" onclick="closeModal('delivery')" type="button">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- CUSTOMER EDIT MODAL -->
+    <div id="customer-edit-modal" class="modal" data-modal-key="customerEdit">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Edit Customer</h2>
+                <button class="modal-close-btn" type="button">&times;</button>
+            </div>
+            <div class="form-grid">
+                <label>Name<input id="customer-edit-name" type="text" /></label>
+                <label>Email<input id="customer-edit-email" type="email" /></label>
+                <label>Phone<input id="customer-edit-phone" type="text" /></label>
+                <label>Loyalty Tier<input id="customer-edit-tier" type="number" min="1" /></label>
+                <label>Membership
+                    <select id="customer-edit-membership">
+                        <option value="0">No</option>
+                        <option value="1">Yes</option>
+                    </select>
+                </label>
+                <label>Membership Discount<input id="customer-edit-discount" type="number" step="0.01" /></label>
+                <label>Membership Due Date<input id="customer-edit-due-date" type="datetime-local" /></label>
+                <label>New Password (optional)<input id="customer-edit-password" type="password" /></label>
+            </div>
+            <div class="modal-actions">
+                <button id="customer-edit-save-btn" type="button">Save Changes</button>
+                <button class="btn-secondary" onclick="closeModal('customerEdit')" type="button">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- RESTAURANT EDIT MODAL -->
+    <div id="restaurant-edit-modal" class="modal" data-modal-key="restaurantEdit">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Edit Restaurant</h2>
+                <button class="modal-close-btn" type="button">&times;</button>
+            </div>
+            <div class="form-grid">
+                <label>Name<input id="restaurant-edit-name" type="text" /></label>
+                <label>Email<input id="restaurant-edit-email" type="email" /></label>
+                <label>Phone<input id="restaurant-edit-phone" type="text" /></label>
+                <label>City<input id="restaurant-edit-city" type="text" /></label>
+                <label>Zip Code<input id="restaurant-edit-zip" type="text" /></label>
+                <label>Address<input id="restaurant-edit-address" type="text" /></label>
+                <label>Latitude<input id="restaurant-edit-lat" type="number" step="0.000001" /></label>
+                <label>Longitude<input id="restaurant-edit-lng" type="number" step="0.000001" /></label>
+                <label>Open
+                    <select id="restaurant-edit-open">
+                        <option value="1">Yes</option>
+                        <option value="0">No</option>
+                    </select>
+                </label>
+                <label>Verified
+                    <select id="restaurant-edit-verified">
+                        <option value="1">Yes</option>
+                        <option value="0">No</option>
+                    </select>
+                </label>
+                <label>Rating (auto-calculated)<input id="restaurant-edit-rating" type="number" step="0.1" min="0" max="5" readonly /></label>
+                <label>New Password (optional)<input id="restaurant-edit-password" type="password" /></label>
+            </div>
+            <div class="modal-actions">
+                <button id="restaurant-edit-save-btn" type="button">Save Changes</button>
+                <button class="btn-secondary" onclick="closeModal('restaurantEdit')" type="button">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- DELIVERY EDIT MODAL -->
+    <div id="delivery-edit-modal" class="modal" data-modal-key="deliveryEdit">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Edit Delivery Partner</h2>
+                <button class="modal-close-btn" type="button">&times;</button>
+            </div>
+            <div class="form-grid">
+                <label>Name<input id="delivery-edit-name" type="text" /></label>
+                <label>Email<input id="delivery-edit-email" type="email" /></label>
+                <label>Phone<input id="delivery-edit-phone" type="text" /></label>
+                <label>Vehicle Number<input id="delivery-edit-vehicle" type="text" /></label>
+                <label>License ID<input id="delivery-edit-license" type="text" /></label>
+                <label>Date of Birth<input id="delivery-edit-dob" type="date" /></label>
+                <label>Latitude<input id="delivery-edit-lat" type="number" step="0.000001" /></label>
+                <label>Longitude<input id="delivery-edit-lng" type="number" step="0.000001" /></label>
+                <label>Online
+                    <select id="delivery-edit-online">
+                        <option value="1">Yes</option>
+                        <option value="0">No</option>
+                    </select>
+                </label>
+                <label>Rating (auto-calculated)<input id="delivery-edit-rating" type="number" step="0.1" min="0" max="5" readonly /></label>
+                <label>New Password (optional)<input id="delivery-edit-password" type="password" /></label>
+            </div>
+            <div class="modal-actions">
+                <button id="delivery-edit-save-btn" type="button">Save Changes</button>
+                <button class="btn-secondary" onclick="closeModal('deliveryEdit')" type="button">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="admin-toast" class="toast hidden"></div>
+    <script src="/static/js/admin.js"></script>
+</body>
+</html>
