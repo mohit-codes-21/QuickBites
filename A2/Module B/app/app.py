@@ -44,6 +44,7 @@ def get_db_connection():
     )
     cursor = connection.cursor()
     cursor.execute("SET time_zone = '+05:30'")
+    cursor.execute("SET @api_source = TRUE")
     cursor.close()
     return connection
 
