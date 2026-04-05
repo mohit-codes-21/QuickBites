@@ -1,6 +1,5 @@
 import math
 import bisect
-import graphviz
 class Node:
     def __init__(self, leaf=False):
         self.leaf = leaf
