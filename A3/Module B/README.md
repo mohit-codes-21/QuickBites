@@ -1,4 +1,4 @@
-# QuickBites (A2 Module B)
+# ScaleOps - QuickBites (Module B)
 
 QuickBites is a multi-role food delivery web application built with Flask + MySQL.
 It includes separate experiences for:
@@ -357,4 +357,4 @@ Logs are written under `Module B/logs`:
 
 ## Video Link
 
-[https://drive.google.com/file/d/11_qTASPAAZiH_r3rJKdd1T1OuKAl3c3_/view?usp=sharing](https://drive.google.com/file/d/11_qTASPAAZiH_r3rJKdd1T1OuKAl3c3_/view?usp=sharing)
+[https://drive.google.com/drive/folders/1OtolgynR4hzeLOUcxGp0q0B9xwqfdKdS?usp=sharing](https://drive.google.com/drive/folders/1OtolgynR4hzeLOUcxGp0q0B9xwqfdKdS?usp=sharing)

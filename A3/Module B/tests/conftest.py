@@ -20,7 +20,7 @@ except ImportError:
     pytest = _PytestCompat()
 
 
-BASE_URL = os.getenv("QB_BASE_URL", "http://127.0.0.1:5001").rstrip("/")
+BASE_URL = os.getenv("QB_BASE_URL", "http://127.0.0.1:5000").rstrip("/")
 
 ADMIN_CREDENTIALS = {
     "email": os.getenv("QB_ADMIN_EMAIL", "aman.shah1@example.com"),

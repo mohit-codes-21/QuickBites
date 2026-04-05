@@ -2,6 +2,7 @@ import json
 import socket
 import threading
 import time
+from urllib.parse import urlparse
 
 import requests
 
@@ -192,8 +193,9 @@ def test_forced_disconnect_mid_write():
     }
     full_json = json.dumps(body)
 
-    parsed_host = "127.0.0.1"
-    parsed_port = 5001
+    parsed = urlparse(BASE_URL)
+    parsed_host = parsed.hostname or "127.0.0.1"
+    parsed_port = parsed.port or (443 if parsed.scheme == "https" else 80)
 
     done = {"sent": False, "error": None}
 

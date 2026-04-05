@@ -98,11 +98,17 @@ class QuickBitesUser(HttpUser):
     def on_stop(self):
         # Best-effort cleanup of records created by this simulated user.
         for item_id in list(self.temp_created_item_ids):
-            self.client.delete(
+            with self.client.delete(
                 f"/api/menu-items/{self.restaurant_id}/{item_id}",
                 headers=self.headers,
                 name="DELETE /api/menu-items/<rid>/<iid>",
-            )
+                catch_response=True,
+            ) as response:
+                # Cleanup is idempotent: missing records should not be counted as failures.
+                if response.status_code in (200, 404):
+                    response.success()
+                else:
+                    response.failure(f"cleanup_delete_failed status={response.status_code}")
 
     @task(3)
     def get_main_listing(self):
