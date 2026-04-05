@@ -4773,10 +4773,6 @@ def restore_member(member_id):
         return json_response(status=500, message=f"Database error: {exc}")
 
 
-# ============================================
-# ADMIN DASHBOARD ENDPOINTS (NEW)
-# ============================================
-
 @app.get("/api/admin/order/<int:order_id>")
 @require_roles("Admin")
 def admin_get_order(order_id):

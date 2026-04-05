@@ -313,3 +313,26 @@ Logs are written under `Module B/logs`:
 ## Video Link
 
 [https://drive.google.com/file/d/11_qTASPAAZiH_r3rJKdd1T1OuKAl3c3_/view?usp=sharing](https://drive.google.com/file/d/11_qTASPAAZiH_r3rJKdd1T1OuKAl3c3_/view?usp=sharing)
+
+---
+
+### Unauthorized Access Demo
+
+```json
+fetch("/api/admin/audits", {
+  method: "GET",
+  headers: {
+    "Authorization": `Bearer ${localStorage.getItem("qb_token")}`
+  }
+}).then(r => r.json().then(b => ({status: r.status, body: b}))).then(console.log)
+```
+
+
+```json
+fetch("/api/customer/cart", {
+  method: "GET",
+  headers: {
+    "Authorization": `Bearer ${localStorage.getItem("qb_token")}`
+  }
+}).then(r => r.json().then(b => ({status: r.status, body: b}))).then(console.log)
+```
