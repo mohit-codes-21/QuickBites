@@ -1,7 +1,6 @@
 % =============================================================================
 %  QuickBites — Assignment 4, SubTask 1
 %  Shard Key Selection & Justification
-%  Module A (Custom B+Tree DB) and Module B (MySQL/Flask API)
 % =============================================================================
 \documentclass[12pt, a4paper]{article}
 
@@ -100,7 +99,7 @@
 \newcommand{\reportfocus}{Assignment~4 --- Sharding of the Developed Application}
 \newcommand{\subtaskfocus}{SubTask~1: Shard Key Selection \& Justification}
 \newcommand{\coursecode}{CS 432: Databases}
-\newcommand{\assignmentinfo}{Assignment 4 --- Module A \& Module B}
+\newcommand{\assignmentinfo}{Assignment 4}
 \newcommand{\semesterinfo}{Semester II, 2025--2026}
 \newcommand{\repositoryurl}{https://github.com/mohit-codes-21/QuickBites}
 \newcommand{\institutionname}{Indian Institute of Technology, Gandhinagar}
@@ -224,7 +223,7 @@ Table~\ref{tab:candidates} lists the shortlisted candidates.
 \midrule
 \textbf{customerID} & \checkmark & \checkmark\checkmark & \checkmark & \textbf{5/5} \\
 restaurantID        & \checkmark & \checkmark           & \checkmark & 4/5 \\
-city (Restaurant)   & \texttimes (low) & \checkmark     & \checkmark & 3/5 \\
+city (Restaurant)   & \texttimes\ (low) & \checkmark   & \checkmark & 3/5 \\
 zipCode             & \checkmark & \texttimes           & \checkmark & 3/5 \\
 orderID (hash)      & \checkmark & \checkmark           & \checkmark & 4/5 \\
 \bottomrule
@@ -343,7 +342,7 @@ with $\texttt{NUM\_SHARDS} = 3$.
         \texttt{customerID} (orders, payments, addresses, cart items) hash
         to the same shard, so customer-scoped queries remain single-shard.
   \item \textbf{Simplicity.} The formula is trivially expressible in both
-        Python (Module~A) and SQL (Module~B).
+        Python and SQL.
 \end{enumerate}
 
 % =============================================================================
@@ -363,9 +362,9 @@ seed customers.
 \toprule
 \textbf{customerID} & \textbf{Shard ID} & \textbf{CustomerIDs in shard} \\
 \midrule
-\rowcolor{shard0} 3, 6, 9  & 0 & \{3, 6, 9\} \\
+\rowcolor{shard0} 3, 6, 9     & 0 & \{3, 6, 9\} \\
 \rowcolor{shard1} 1, 4, 7, 10 & 1 & \{1, 4, 7, 10\} \\
-\rowcolor{shard2} 2, 5, 8  & 2 & \{2, 5, 8\} \\
+\rowcolor{shard2} 2, 5, 8     & 2 & \{2, 5, 8\} \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -433,13 +432,13 @@ GROUP BY shard_id
 ORDER BY shard_id;
 \end{lstlisting}
 
-\subsection{Module A: Python Routing Function}
+\subsection{Shard Routing Function}
 
-Listing~\ref{lst:router} shows the shard routing function implemented in
-\texttt{A4/Module~A/shard\_key\_analysis.py}. The same formula drives both
-the Module~A (Python B+Tree) and Module~B (MySQL) implementations.
+Listing~\ref{lst:router} shows the shard routing helper implemented in
+\texttt{A4/shard\_key\_analysis.py}. This function is the single
+authoritative routing rule for the application.
 
-\begin{lstlisting}[style=python, caption={Hash-based shard router (Module A)},
+\begin{lstlisting}[style=python, caption={Hash-based shard router},
                    label={lst:router}]
 NUM_SHARDS = 3
 
@@ -583,10 +582,9 @@ MenuItemRating   & Sharded (via Orders) & FK on orderID \\
         hotspots --- all of which are manageable and noted for SubTask~4.
 \end{itemize}
 
-The design described here is fully implemented in
-\texttt{A4/Module~A/shard\_key\_analysis.py} (Python routing function and
-distribution analysis) and
-\texttt{A4/Module~B/subtask1\_shard\_analysis.sql} (SQL distribution
+The design is implemented in \texttt{A4/shard\_key\_analysis.py}
+(Python routing function and distribution analysis) and
+\texttt{A4/subtask1\_shard\_analysis.sql} (SQL distribution
 verification queries). These artefacts provide the foundation for
 SubTask~2 (shard table creation and data migration) and SubTask~3
 (query routing implementation).
@@ -599,11 +597,9 @@ SubTask~2 (shard table creation and data migration) and SubTask~3
 \begin{verbatim}
 A4/
 +-- Track1_assignment4.pdf          # Assignment spec
-+-- A4_Subtask1_Report.tex          # This report
-+-- Module A/
-|   +-- shard_key_analysis.py       # Python routing + distribution analysis
-+-- Module B/
-    +-- subtask1_shard_analysis.sql # SQL cardinality + distribution queries
++-- A4_Subtask1_Report.tex          # This report (SubTask 1)
++-- shard_key_analysis.py           # Routing function + distribution analysis
++-- subtask1_shard_analysis.sql     # SQL cardinality + distribution queries
 \end{verbatim}
 
 \end{document}
