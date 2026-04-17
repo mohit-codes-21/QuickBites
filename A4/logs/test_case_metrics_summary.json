@@ -1,0 +1,36 @@
+{
+  "metricsSource": "logs/test_metrics.jsonl",
+  "latestEntryCount": 16,
+  "suiteTotals": {
+    "concurrent": {
+      "total": 4,
+      "passed": 4,
+      "failed": 0
+    },
+    "race": {
+      "total": 2,
+      "passed": 2,
+      "failed": 0
+    },
+    "failure": {
+      "total": 4,
+      "passed": 4,
+      "failed": 0
+    },
+    "stress": {
+      "total": 1,
+      "passed": 1,
+      "failed": 0
+    },
+    "acid": {
+      "total": 5,
+      "passed": 5,
+      "failed": 0
+    }
+  },
+  "generatedFigures": [
+    "figures/test_cases/test_pass_fail_by_suite.png",
+    "figures/test_cases/test_duration_by_case_ms.png",
+    "figures/test_cases/stress_endpoint_metrics.png"
+  ]
+}

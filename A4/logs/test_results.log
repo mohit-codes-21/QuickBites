@@ -1,0 +1,146 @@
+[2026-04-01T12:39:49Z] Concurrent Scenario 1 - 15 parallel reads | PASS | successful_reads=15/15
+[2026-04-01T12:39:50Z] Concurrent Scenario 2 - 15 parallel updates | PASS | updates_ok=15/15, final_name=Temp_Update_4_12
+[2026-04-01T12:39:51Z] Concurrent Scenario 3 - delete while readers run | PASS | readers=14, delete_ok=True, post_visible=0
+[2026-04-01T12:39:53Z] Race Condition - 50 concurrent signup attempts | PASS | success=1, rolled_back=49, network_failures=0, final_active_rows=1
+[2026-04-01T12:42:27Z] Failure Test 1 - Mid-transaction rollback | PASS | signup_status=400, present_in_admin=False, login_status=401
+[2026-04-01T12:42:28Z] Failure Test 2 - API timeout simulation | PASS | timeout_caught=True, account_exists=True, no_partial=True
+[2026-04-01T12:42:29Z] Failure Test 3 - Forced disconnect mid-write | PASS | sent_partial=True, account_exists=False, sender_error=None
+[2026-04-01T12:42:29Z] Failure Simulation Summary | PASS | passed=3/3
+[2026-04-01T12:45:34Z] Stress Test (threading fallback) | PASS | total=1000, avg_ms=99.783, p95_ms=129.699, error_rate=22.000, rps=393.056, cleaned=52
+[2026-04-01T12:47:55Z] ACID Atomicity | PASS | signup_status=400, visible_after_failure=False
+[2026-04-01T12:47:55Z] ACID Consistency | PASS | orphan_orders=0, orphan_order_items=0, orphan_customers=0, null_member_criticals=0
+[2026-04-01T12:47:56Z] ACID Isolation | PASS | seen_during_partial=False, seen_after_disconnect=False
+[2026-04-01T12:47:57Z] ACID Durability | PASS | create_ok=True, exists_after_restart=True, get_status=200
+[2026-04-01T12:47:57Z] ACID Summary | PASS | passed=4/4
+[2026-04-04T09:53:40Z] Race Condition - 50 concurrent signup attempts | FAIL | success=0, rolled_back=50, network_failures=0, final_active_rows=0
+[2026-04-04T09:54:32Z] Concurrent Scenario 1 - 15 parallel reads | PASS | successful_reads=15/15
+[2026-04-04T09:54:33Z] Concurrent Scenario 2 - 15 parallel updates | PASS | updates_ok=15/15, final_name=Temp_Update_61_6
+[2026-04-04T09:54:34Z] Concurrent Scenario 3 - delete while readers run | PASS | readers=14, delete_ok=True, post_visible=0
+[2026-04-04T09:54:36Z] Race Condition - 50 concurrent signup attempts | PASS | success=1, rolled_back=49, network_failures=0, final_active_rows=1
+[2026-04-04T09:54:44Z] Stress Test (threading fallback) | PASS | total=1000, avg_ms=107.213, p95_ms=137.302, error_rate=22.800, rps=366.063, cleaned=46
+[2026-04-04T09:55:48Z] Stress Test (threading fallback) | PASS | total=1000, avg_ms=120.194, p95_ms=160.124, error_rate=23.300, rps=326.269, cleaned=45
+[2026-04-04T09:57:12Z] Concurrent Scenario 1 - 15 parallel reads | PASS | successful_reads=15/15
+[2026-04-04T09:57:13Z] Concurrent Scenario 2 - 15 parallel updates | PASS | updates_ok=15/15, final_name=Temp_Update_166_14
+[2026-04-04T09:57:14Z] Concurrent Scenario 3 - delete while readers run | PASS | readers=14, delete_ok=True, post_visible=0
+[2026-04-04T09:57:25Z] Race Condition - 50 concurrent signup attempts | PASS | success=1, rolled_back=49, network_failures=0, final_active_rows=1
+[2026-04-04T09:57:30Z] Stress Test (threading fallback) | PASS | total=1000, avg_ms=144.082, p95_ms=688.180, error_rate=25.300, rps=274.069, cleaned=32
+[2026-04-04T10:08:51Z] Concurrent Scenario 1 - 15 parallel reads | PASS | successful_reads=15/15
+[2026-04-04T10:08:52Z] Concurrent Scenario 2 - 15 parallel updates | PASS | updates_ok=15/15, final_name=Temp_Update_201_6
+[2026-04-04T10:08:53Z] Concurrent Scenario 3 - delete while readers run | PASS | readers=14, delete_ok=True, post_visible=0
+[2026-04-04T10:08:54Z] Concurrent Scenario 4 - same cart item contention | PASS | updates_ok=25/25, final_quantity=25
+[2026-04-04T10:09:06Z] Race Condition - 50 concurrent signup attempts | PASS | success=1, rolled_back=49, network_failures=0, final_active_rows=1
+[2026-04-04T10:09:08Z] Race Condition - concurrent delivery acceptance | PASS | success=1, contenders=10, rows_for_order=1, network_failures=0
+[2026-04-04T10:09:16Z] Failure Test 1 - Mid-transaction rollback | PASS | signup_status=400, present_in_admin=False, login_status=401
+[2026-04-04T10:09:17Z] Failure Test 2 - API timeout simulation | PASS | timeout_caught=True, account_exists=True, no_partial=True
+[2026-04-04T10:09:18Z] Failure Test 3 - Forced disconnect mid-write | PASS | sent_partial=True, account_exists=False, sender_error=None
+[2026-04-04T10:09:18Z] Failure Simulation Summary | PASS | passed=3/3
+[2026-04-04T10:09:31Z] Stress Test (threading fallback) | PASS | total=1000, avg_ms=268.325, p95_ms=1103.098, error_rate=24.600, rps=146.863, cleaned=37
+[2026-04-04T10:09:40Z] ACID Atomicity | PASS | signup_status=400, visible_after_failure=False
+[2026-04-04T10:09:41Z] ACID Consistency | PASS | orphan_orders=0, orphan_order_items=0, orphan_customers=0, null_member_criticals=0
+[2026-04-04T10:09:41Z] ACID Isolation | PASS | seen_during_partial=False, seen_after_disconnect=False
+[2026-04-04T10:09:43Z] ACID Durability | PASS | create_ok=True, exists_after_restart=True, get_status=200
+[2026-04-04T10:09:43Z] ACID Summary | PASS | passed=4/4
+[2026-04-04T10:10:49Z] Race Condition - 50 concurrent signup attempts | PASS | success=1, rolled_back=49, network_failures=0, final_active_rows=1
+[2026-04-04T10:10:51Z] Race Condition - concurrent delivery acceptance | PASS | success=1, contenders=10, rows_for_order=1, network_failures=0
+[2026-04-04T10:10:59Z] Stress Test (threading fallback) | PASS | total=1000, avg_ms=271.577, p95_ms=1241.130, error_rate=29.100, rps=143.828, cleaned=8
+[2026-04-04T10:12:50Z] Concurrent Scenario 1 - 15 parallel reads | PASS | successful_reads=15/15
+[2026-04-04T10:12:51Z] Concurrent Scenario 2 - 15 parallel updates | PASS | updates_ok=15/15, final_name=Temp_Update_254_10
+[2026-04-04T10:12:52Z] Concurrent Scenario 3 - delete while readers run | PASS | readers=14, delete_ok=True, post_visible=0
+[2026-04-04T10:12:53Z] Concurrent Scenario 4 - same cart item contention | PASS | updates_ok=25/25, final_quantity=25
+[2026-04-04T10:13:04Z] Race Condition - 50 concurrent signup attempts | PASS | success=1, rolled_back=49, network_failures=0, final_active_rows=1
+[2026-04-04T10:13:06Z] Race Condition - concurrent delivery acceptance | PASS | success=1, contenders=10, rows_for_order=1, network_failures=0
+[2026-04-04T10:13:26Z] Stress Test (threading fallback) | PASS | total=1000, avg_ms=286.180, p95_ms=949.103, error_rate=3.800, rps=138.138, cleaned=204
+[2026-04-04T10:14:38Z] Concurrent Scenario 1 - 15 parallel reads | PASS | successful_reads=15/15
+[2026-04-04T10:14:39Z] Concurrent Scenario 2 - 15 parallel updates | PASS | updates_ok=15/15, final_name=Temp_Update_463_7
+[2026-04-04T10:14:39Z] Concurrent Scenario 3 - delete while readers run | PASS | readers=14, delete_ok=True, post_visible=0
+[2026-04-04T10:14:41Z] Concurrent Scenario 4 - same cart item contention | PASS | updates_ok=25/25, final_quantity=25
+[2026-04-04T10:14:52Z] Race Condition - 50 concurrent signup attempts | PASS | success=1, rolled_back=49, network_failures=0, final_active_rows=1
+[2026-04-04T10:14:54Z] Race Condition - concurrent delivery acceptance | PASS | success=1, contenders=10, rows_for_order=1, network_failures=0
+[2026-04-04T10:15:13Z] Stress Test (threading fallback) | PASS | total=1000, avg_ms=326.087, p95_ms=1113.071, error_rate=0.100, rps=120.835, cleaned=203
+[2026-04-04T10:15:19Z] Failure Test 1 - Mid-transaction rollback | PASS | signup_status=400, present_in_admin=False, login_status=401
+[2026-04-04T10:15:20Z] Failure Test 2 - API timeout simulation | PASS | timeout_caught=True, account_exists=True, no_partial=True
+[2026-04-04T10:15:21Z] Failure Test 3 - Forced disconnect mid-write | PASS | sent_partial=True, account_exists=False, sender_error=None
+[2026-04-04T10:15:21Z] Failure Simulation Summary | PASS | passed=3/3
+[2026-04-04T10:15:26Z] ACID Atomicity | PASS | signup_status=400, visible_after_failure=False
+[2026-04-04T10:15:27Z] ACID Consistency | PASS | orphan_orders=0, orphan_order_items=0, orphan_customers=0, null_member_criticals=0
+[2026-04-04T10:15:27Z] ACID Isolation | PASS | seen_during_partial=False, seen_after_disconnect=False
+[2026-04-04T10:15:29Z] ACID Durability | PASS | create_ok=True, exists_after_restart=True, get_status=200
+[2026-04-04T10:15:29Z] ACID Summary | PASS | passed=4/4
+[2026-04-04T10:25:51Z] Concurrent Scenario 1 - 15 parallel reads | PASS | successful_reads=15/15 | duration_ms=899.391
+[2026-04-04T10:25:52Z] Concurrent Scenario 2 - 15 parallel updates | PASS | updates_ok=15/15, final_name=Temp_Update_673_9 | duration_ms=929.079
+[2026-04-04T10:25:53Z] Concurrent Scenario 3 - delete while readers run | PASS | readers=14, delete_ok=True, post_visible=0 | duration_ms=887.837
+[2026-04-04T10:25:54Z] Concurrent Scenario 4 - same cart item contention | PASS | updates_ok=25/25, final_quantity=25 | duration_ms=1028.744
+[2026-04-04T10:26:07Z] Race Condition - 50 concurrent signup attempts | PASS | success=1, rolled_back=49, network_failures=0, final_active_rows=1 | duration_ms=12097.036
+[2026-04-04T10:26:09Z] Race Condition - concurrent delivery acceptance | PASS | success=1, contenders=10, rows_for_order=1, network_failures=0 | duration_ms=1530.016
+[2026-04-04T10:26:15Z] Failure Test 1 - Mid-transaction rollback | PASS | signup_status=400, present_in_admin=False, login_status=401 | duration_ms=777.234
+[2026-04-04T10:26:16Z] Failure Test 2 - API timeout simulation | PASS | timeout_caught=True, account_exists=True, no_partial=True | duration_ms=938.558
+[2026-04-04T10:26:17Z] Failure Test 3 - Forced disconnect mid-write | PASS | sent_partial=True, account_exists=False, sender_error=None | duration_ms=901.320
+[2026-04-04T10:26:17Z] Failure Simulation Summary | PASS | passed=3/3 | duration_ms=2657.376
+[2026-04-04T10:26:35Z] Stress Test (threading fallback) | PASS | total=1000, avg_ms=408.012, p95_ms=1282.650, error_rate=0.200, rps=96.760, cleaned=194 | duration_ms=10334.812
+[2026-04-04T10:26:42Z] ACID Atomicity | PASS | signup_status=400, visible_after_failure=False | duration_ms=748.203
+[2026-04-04T10:26:42Z] ACID Consistency | PASS | orphan_orders=0, orphan_order_items=0, orphan_customers=0, null_member_criticals=0 | duration_ms=539.620
+[2026-04-04T10:26:43Z] ACID Isolation | PASS | seen_during_partial=False, seen_after_disconnect=False | duration_ms=424.911
+[2026-04-04T10:26:44Z] ACID Durability | PASS | create_ok=True, exists_after_restart=True, get_status=200 | duration_ms=1647.239
+[2026-04-04T10:26:44Z] ACID Summary | PASS | passed=4/4 | duration_ms=3651.964
+[2026-04-04T10:42:01Z] Concurrent Scenario 1 - 15 parallel reads | PASS | successful_reads=15/15 | duration_ms=866.930
+[2026-04-04T10:42:02Z] Concurrent Scenario 2 - 15 parallel updates | PASS | updates_ok=15/15, final_name=Temp_Update_874_13 | duration_ms=924.887
+[2026-04-04T10:42:02Z] Concurrent Scenario 3 - delete while readers run | PASS | readers=14, delete_ok=True, post_visible=0 | duration_ms=887.844
+[2026-04-04T10:42:04Z] Concurrent Scenario 4 - same cart item contention | PASS | updates_ok=25/25, final_quantity=25 | duration_ms=1045.663
+[2026-04-04T10:42:17Z] Race Condition - 50 concurrent signup attempts | PASS | success=1, rolled_back=49, network_failures=0, final_active_rows=1 | duration_ms=12979.271
+[2026-04-04T10:42:19Z] Race Condition - concurrent delivery acceptance | PASS | success=1, contenders=10, rows_for_order=1, network_failures=0 | duration_ms=1515.869
+[2026-04-04T10:42:20Z] Failure Test 1 - Mid-transaction rollback | PASS | signup_status=400, present_in_admin=False, login_status=401 | duration_ms=790.622
+[2026-04-04T10:42:21Z] Failure Test 2 - API timeout simulation | PASS | timeout_caught=True, account_exists=True, no_partial=True | duration_ms=937.499
+[2026-04-04T10:42:22Z] Failure Test 3 - Forced disconnect mid-write | PASS | sent_partial=True, account_exists=False, sender_error=None | duration_ms=907.160
+[2026-04-04T10:42:22Z] Failure Simulation Summary | PASS | passed=3/3 | duration_ms=2673.148
+[2026-04-04T10:42:23Z] ACID Atomicity | PASS | signup_status=400, visible_after_failure=False | duration_ms=749.684
+[2026-04-04T10:42:24Z] ACID Consistency | PASS | orphan_orders=0, orphan_order_items=0, orphan_customers=0, null_member_criticals=0 | duration_ms=532.453
+[2026-04-04T10:42:24Z] ACID Isolation | PASS | seen_during_partial=False, seen_after_disconnect=False | duration_ms=423.972
+[2026-04-04T10:42:26Z] ACID Durability | PASS | create_ok=True, exists_after_restart=True, get_status=200 | duration_ms=1425.692
+[2026-04-04T10:42:26Z] ACID Summary | PASS | passed=4/4 | duration_ms=3421.197
+[2026-04-04T10:42:45Z] Stress Test (threading fallback) | PASS | total=1000, avg_ms=463.105, p95_ms=1543.008, error_rate=0.000, rps=85.488, cleaned=206 | duration_ms=11697.538
+[2026-04-04T11:13:06Z] Stress Test (threading fallback) | PASS | total=1000, avg_ms=870.285, p95_ms=2471.012, median_ms=670.651, error_rate=0.000, rps=45.579, cleaned=187 | duration_ms=21939.766
+[2026-04-05T10:25:32Z] Concurrent Scenario 1 - 15 parallel reads | PASS | successful_reads=15/15 | duration_ms=2629.949
+[2026-04-05T10:25:35Z] Concurrent Scenario 2 - 15 parallel updates | PASS | updates_ok=15/15, final_name=Temp_Update_4_6 | duration_ms=2638.549
+[2026-04-05T10:25:38Z] Concurrent Scenario 3 - delete while readers run | PASS | readers=14, delete_ok=True, post_visible=0 | duration_ms=2738.728
+[2026-04-05T10:25:42Z] Concurrent Scenario 4 - same cart item contention | PASS | updates_ok=25/25, final_quantity=25 | duration_ms=3869.281
+[2026-04-05T10:30:58Z] Race Condition - 50 concurrent signup attempts | PASS | success=1, rolled_back=49, network_failures=0, final_active_rows=1 | duration_ms=12001.222
+[2026-04-05T10:31:03Z] Race Condition - concurrent delivery acceptance | PASS | success=1, contenders=10, rows_for_order=1, network_failures=0 | duration_ms=4258.276
+[2026-04-05T10:34:41Z] Failure Test 1 - Mid-transaction rollback | PASS | signup_status=400, present_in_admin=False, login_status=401 | duration_ms=1351.382
+[2026-04-05T10:34:42Z] Failure Test 2 - API timeout simulation | PASS | timeout_caught=True, account_exists=True, no_partial=True | duration_ms=1225.404
+[2026-04-05T10:34:45Z] Failure Test 3 - Forced disconnect mid-write | FAIL | sent_partial=False, account_exists=False, sender_error=[WinError 10061] No connection could be made because the target machine actively refused it | duration_ms=3019.245
+[2026-04-05T10:34:45Z] Failure Simulation Summary | FAIL | passed=2/3 | duration_ms=5739.396
+[2026-04-05T10:39:15Z] Failure Test 1 - Mid-transaction rollback | PASS | signup_status=400, present_in_admin=False, login_status=401 | duration_ms=1037.737
+[2026-04-05T10:39:17Z] Failure Test 2 - API timeout simulation | PASS | timeout_caught=True, account_exists=True, no_partial=True | duration_ms=1400.850
+[2026-04-05T10:39:18Z] Failure Test 3 - Forced disconnect mid-write | PASS | sent_partial=True, account_exists=False, sender_error=None | duration_ms=1146.635
+[2026-04-05T10:39:18Z] Failure Simulation Summary | PASS | passed=3/3 | duration_ms=3702.792
+[2026-04-05T10:39:42Z] ACID Atomicity | PASS | signup_status=400, visible_after_failure=False | duration_ms=1301.477
+[2026-04-05T10:39:43Z] ACID Consistency | PASS | orphan_orders=0, orphan_order_items=0, orphan_customers=0, null_member_criticals=0 | duration_ms=1279.204
+[2026-04-05T10:39:44Z] ACID Isolation | PASS | seen_during_partial=False, seen_after_disconnect=False | duration_ms=591.486
+[2026-04-05T10:39:46Z] ACID Durability | PASS | create_ok=True, exists_after_restart=True, get_status=200 | duration_ms=2315.755
+[2026-04-05T10:39:46Z] ACID Summary | PASS | passed=4/4 | duration_ms=7882.865
+[2026-04-05T10:41:36Z] Stress Test (threading fallback) | PASS | total=1000, avg_ms=3087.156, p95_ms=8024.746, median_ms=2082.741, error_rate=15.700, rps=12.864, cleaned=112 | duration_ms=77738.590
+[2026-04-05T12:11:33Z] Concurrent Scenario 1 - 15 parallel reads | PASS | successful_reads=15/15 | duration_ms=3648.771
+[2026-04-05T12:11:37Z] Concurrent Scenario 2 - 15 parallel updates | PASS | updates_ok=15/15, final_name=Temp_Update_528_1 | duration_ms=3856.463
+[2026-04-05T12:11:41Z] Concurrent Scenario 3 - delete while readers run | PASS | readers=14, delete_ok=True, post_visible=0 | duration_ms=3742.008
+[2026-04-05T12:11:48Z] Concurrent Scenario 4 - same cart item contention | PASS | updates_ok=25/25, final_quantity=25 | duration_ms=6196.683
+[2026-04-05T12:12:43Z] Race Condition - 50 concurrent signup attempts | FAIL | success=1, rolled_back=30, network_failures=19, final_active_rows=1 | duration_ms=17098.980
+[2026-04-05T12:13:41Z] Race Condition - 50 concurrent signup attempts | FAIL | success=1, rolled_back=46, network_failures=3, final_active_rows=1 | duration_ms=15689.292
+[2026-04-05T12:13:48Z] Race Condition - concurrent delivery acceptance | PASS | success=1, contenders=10, rows_for_order=1, network_failures=0 | duration_ms=5931.205
+[2026-04-05T12:20:18Z] Race Condition - 50 concurrent signup attempts | PASS | success=1, rolled_back=49, network_failures=0, final_active_rows=1 | duration_ms=9320.799
+[2026-04-05T12:20:24Z] Race Condition - concurrent delivery acceptance | PASS | success=1, contenders=10, rows_for_order=1, network_failures=0 | duration_ms=5810.281
+[2026-04-05T12:22:28Z] Concurrent Scenario 1 - 15 parallel reads | PASS | successful_reads=15/15 | duration_ms=2807.137
+[2026-04-05T12:22:31Z] Concurrent Scenario 2 - 15 parallel updates | PASS | updates_ok=15/15, final_name=Temp_Update_534_6 | duration_ms=2707.298
+[2026-04-05T12:22:33Z] Concurrent Scenario 3 - delete while readers run | PASS | readers=14, delete_ok=True, post_visible=0 | duration_ms=2469.911
+[2026-04-05T12:22:39Z] Concurrent Scenario 4 - same cart item contention | PASS | updates_ok=25/25, final_quantity=25 | duration_ms=5089.675
+[2026-04-05T12:23:21Z] Race Condition - 50 concurrent signup attempts | PASS | success=1, rolled_back=49, network_failures=0, final_active_rows=1 | duration_ms=16312.180
+[2026-04-05T12:23:26Z] Race Condition - concurrent delivery acceptance | PASS | success=1, contenders=10, rows_for_order=1, network_failures=0 | duration_ms=4615.594
+[2026-04-05T12:24:23Z] Failure Test 1 - Mid-transaction rollback | PASS | signup_status=400, present_in_admin=False, login_status=401 | duration_ms=1695.780
+[2026-04-05T12:24:24Z] Failure Test 2 - API timeout simulation | PASS | timeout_caught=True, account_exists=True, no_partial=True | duration_ms=1329.122
+[2026-04-05T12:24:26Z] Failure Test 3 - Forced disconnect mid-write | PASS | sent_partial=True, account_exists=False, sender_error=None | duration_ms=1247.398
+[2026-04-05T12:24:26Z] Failure Simulation Summary | PASS | passed=3/3 | duration_ms=4427.753
+[2026-04-05T12:25:37Z] ACID Atomicity | PASS | signup_status=400, visible_after_failure=False | duration_ms=1082.627
+[2026-04-05T12:25:38Z] ACID Consistency | PASS | orphan_orders=0, orphan_order_items=0, orphan_customers=0, null_member_criticals=0 | duration_ms=1489.639
+[2026-04-05T12:25:39Z] ACID Isolation | PASS | seen_during_partial=False, seen_after_disconnect=False | duration_ms=819.663
+[2026-04-05T12:25:43Z] ACID Durability | PASS | create_ok=True, exists_after_restart=True, get_status=200 | duration_ms=3324.396
+[2026-04-05T12:25:43Z] ACID Summary | PASS | passed=4/4 | duration_ms=9364.544
+[2026-04-05T12:28:23Z] Stress Test (threading fallback) | PASS | total=1000, avg_ms=4707.836, p95_ms=8027.414, median_ms=5067.228, error_rate=23.700, rps=8.406, cleaned=95 | duration_ms=118963.864

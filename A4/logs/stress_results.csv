@@ -1,0 +1,7 @@
+endpoint,avg_response_ms,p95_response_ms,error_rate_percent,rps
+POST POST /api/auth/login,3038.46,4100.0,0.0,0.0
+GET GET /api/menu-items?search=single,3170.098,5900.0,0.0,1.5
+POST POST /api/menu-items,6139.2,11000.0,0.0,1.0
+PUT PUT /api/menu-items/<rid>/<iid>,3578.93,5800.0,0.0,0.3
+DELETE DELETE /api/menu-items/<rid>/<iid>,3618.566,6200.0,0.0,1.0
+GET GET /api/menu-items,13521.958,16000.0,0.0,1.8

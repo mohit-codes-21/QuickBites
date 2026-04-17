@@ -1,0 +1,133 @@
+Concurrent Usage: Concept and Actual Implementation
+
+1) What concurrency means here
+- Concurrency testing checks what happens when many users hit the backend at almost the same time.
+- The goal is to find race conditions, data corruption, stale reads, and cross-user interference.
+- In your case, we tested read/read, write/write, and delete/read overlap on the same logical record.
+
+2) Why this matters
+- Real production traffic is not one request at a time.
+- If 15 users operate on one record simultaneously, the app must remain correct.
+- Correct means:
+  - No server crash
+  - No broken/invalid final data
+  - No user seeing another user's unauthorized data
+
+3) How I implemented it in your project
+File used: tests/concurrent_test.py
+Helper file used: tests/conftest.py
+
+A) Shared setup approach
+- I used authenticated HTTP requests (requests library) only.
+- Before each scenario, I create a temporary menu record through API:
+  - POST /api/menu-items
+- After each scenario, I clean up that record:
+  - DELETE /api/menu-items/{restaurantID}/{itemID}
+- This keeps tests repeatable and avoids polluting your DB.
+
+B) Thread orchestration model
+- I used Python threading with 15 threads.
+- For precise simultaneous start, I used:
+  - threading.Barrier in read/read and write/write cases
+  - threading.Event in delete/read case
+- This ensures threads start together (or in controlled order), so overlap is real and not accidental.
+
+4) Scenario-by-scenario implementation
+
+Scenario 1: 15 users reading same record simultaneously
+- Function: scenario_parallel_reads
+- Steps:
+  1. Create temp record.
+  2. Login as Admin (JWT token).
+  3. Start 15 threads; each does GET /api/menu-items with search for that temp name.
+  4. Each thread validates exactly one matching row with same itemID.
+- Pass criteria:
+  - 15/15 successful reads.
+- Why this checks non-interference:
+  - Multiple readers must see consistent data without blocking/failing each other.
+
+Scenario 2: 15 users updating same record simultaneously
+- Function: scenario_parallel_updates
+- Steps:
+  1. Create temp record.
+  2. Login as RestaurantManager (owner token for updates).
+  3. Start 15 threads; each sends PUT /api/menu-items/{rid}/{iid} with a different name value.
+  4. Collect all attempted names and status codes.
+  5. Final GET reads record state.
+- Pass criteria:
+  - All update calls return success status.
+  - Final record name must be one of attempted names (last-writer-wins acceptable).
+- Why this checks non-interference:
+  - Concurrent writes should not produce corrupted mixed state; final value must be a valid full write from one request.
+
+Scenario 3: delete while readers are active
+- Function: scenario_delete_while_reading
+- Steps:
+  1. Create temp record.
+  2. Start N-1 reader threads (GET list with search) and 1 deleter thread (DELETE record).
+  3. Readers and deleter overlap in time.
+  4. After completion, GET checks record no longer visible in normal listing.
+- Pass criteria:
+  - Readers do not crash.
+  - Delete succeeds.
+  - Post-check shows deleted record not visible.
+- Note:
+  - Your menu API is list-based, so deleted behavior is verified as "not present in list" (404-equivalent for this endpoint style).
+
+5) Safety and isolation mechanisms used in code
+- JWT auth headers on all calls.
+- Locking for in-memory shared structures (results/status lists) to avoid test-side race bugs.
+- Temporary record lifecycle per scenario for isolation.
+- Per-scenario PASS/FAIL output with reason.
+- Summary appended to logs/test_results.log via append_test_result helper.
+
+6) What this proves about your system
+- Parallel reads are stable.
+- Parallel updates do not corrupt final stored value.
+- Delete/read overlap is handled without crashes and with expected post-delete visibility behavior.
+- Users are not interfering in a way that breaks correctness for these tested paths.
+
+7) Limitations (important)
+- These are black-box API-level concurrency checks, not full DB lock tracing.
+- They prove observable correctness at API layer, not internal lock strategy details.
+- If you want deeper DB-level proof, add transaction-level instrumentation or DB engine lock diagnostics.
+
+8) In simple words
+- I created one temporary record.
+- I made many threads act like many users at the same time.
+- I checked whether reads, updates, and deletes stayed logically correct.
+- I cleaned up test data and logged clear PASS/FAIL results.
+
+9) Critical operation race test (many users, same operation)
+
+Concept
+- A critical operation is a write path where duplicate or conflicting writes can break business correctness.
+- In this project, the chosen critical operation was account creation (signup) with the same email.
+- Why critical:
+  - If concurrency control fails, multiple rows for one logical user can appear.
+  - This causes identity and authorization inconsistencies.
+
+How implemented
+- File used: tests/race_condition_test.py
+- Operation simulated:
+  - 50 concurrent threads call POST /api/auth/signup with the exact same payload (same email).
+- Thread model:
+  - All threads are aligned with a Barrier, then fired together to maximize collision.
+- Validation steps:
+  1. Count how many requests succeeded (201).
+  2. Count how many were rejected/rolled back (409/400/500).
+  3. Query via HTTP (GET /api/admin/customers) and verify final DB-visible state has exactly one active account for that email.
+
+Pass criteria
+- Exactly one success.
+- Remaining requests are rejected/rolled back.
+- Final visible state contains one active record only.
+
+Why this proves correctness
+- Many users attempted the same critical write simultaneously.
+- The backend preserved correctness (no duplicate logical account, no lost integrity).
+- This demonstrates race-condition safety for that operation under contention.
+
+Cleanup
+- The created account is soft-deleted after verification using admin API.
+- This keeps tests repeatable and database state clean.

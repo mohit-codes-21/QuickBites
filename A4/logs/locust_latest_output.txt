@@ -1,0 +1,29 @@
+[2026-04-04 16:18:52,975] Tanishqs-MacBook-Pro-3/INFO/locust.main: Starting Locust 2.43.4
+[2026-04-04 16:18:52,978] Tanishqs-MacBook-Pro-3/INFO/locust.main: Run time limit set to 60 seconds
+[2026-04-04 16:18:52,979] Tanishqs-MacBook-Pro-3/INFO/locust.runners: Ramping to 60 users at a rate of 20.00 per second
+[2026-04-04 16:18:54,989] Tanishqs-MacBook-Pro-3/INFO/locust.runners: All users spawned: {"QuickBitesUser": 60} (60 total users)
+[2026-04-04 16:19:52,727] Tanishqs-MacBook-Pro-3/INFO/locust.main: --run-time limit reached, shutting down
+[2026-04-04 16:19:55,604] Tanishqs-MacBook-Pro-3/INFO/locust.main: Shutting down (exit code 0)
+Type     Name                                                                          # reqs      # fails |    Avg     Min     Max    Med |   req/s  failures/s
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+DELETE   DELETE /api/menu-items/<rid>/<iid>                                               774     0(0.00%) |    273      26    1229    270 |   12.36        0.00
+GET      GET /api/menu-items                                                              920     0(0.00%) |    525      68    1076    540 |   14.69        0.00
+GET      GET /api/menu-items?search=single                                                997     0(0.00%) |    222      32     502    220 |   15.92        0.00
+POST     POST /api/auth/login                                                              60     0(0.00%) |    773     497    1017    740 |    0.96        0.00
+POST     POST /api/menu-items                                                             660     0(0.00%) |    518      30    3029    410 |   10.54        0.00
+PUT      PUT /api/menu-items/<rid>/<iid>                                                  333     0(0.00%) |    274      45    1683    260 |    5.32        0.00
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+         Aggregated                                                                      3744     0(0.00%) |    373      26    3029    300 |   59.78        0.00
+
+Response time percentiles (approximated)
+Type     Name                                                                                  50%    66%    75%    80%    90%    95%    98%    99%  99.9% 99.99%   100% # reqs
+--------|--------------------------------------------------------------------------------|--------|------|------|------|------|------|------|------|------|------|------|------
+DELETE   DELETE /api/menu-items/<rid>/<iid>                                                    270    320    340    360    420    500    600    680   1200   1200   1200    774
+GET      GET /api/menu-items                                                                   540    610    670    710    800    870    950   1000   1100   1100   1100    920
+GET      GET /api/menu-items?search=single                                                     220    260    280    300    340    370    410    420    500    500    500    997
+POST     POST /api/auth/login                                                                  740    750    960    970   1000   1000   1000   1000   1000   1000   1000     60
+POST     POST /api/menu-items                                                                  410    530    630    710   1000   1400   1800   2300   3000   3000   3000    660
+PUT      PUT /api/menu-items/<rid>/<iid>                                                       260    310    340    350    410    450    620    960   1700   1700   1700    333
+--------|--------------------------------------------------------------------------------|--------|------|------|------|------|------|------|------|------|------|------|------
+         Aggregated                                                                            300    390    480    550    700    830   1000   1300   2600   3000   3000   3744
+
