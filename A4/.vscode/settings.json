@@ -1,0 +1,23 @@
+{
+  "latex-workshop.latex.tools": [
+    {
+      "name": "tectonic",
+      "command": "tectonic",
+      "args": [
+        "--synctex",
+        "--keep-logs",
+        "--outdir=%DIR%",
+        "%DIR%/%DOCFILE%.tex"
+      ]
+    }
+  ],
+  "latex-workshop.latex.recipes": [
+    {
+      "name": "tectonic",
+      "tools": [
+        "tectonic"
+      ]
+    }
+  ],
+  "latex-workshop.latex.recipe.default": "tectonic"
+}

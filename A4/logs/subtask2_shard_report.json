@@ -1,0 +1,132 @@
+{
+  "source": {
+    "host": "127.0.0.1",
+    "port": 3306,
+    "user": "qb_admin",
+    "password": "qb_admin@123",
+    "database": "QB"
+  },
+  "shards": [
+    {
+      "shardID": 0,
+      "host": "10.0.116.184",
+      "port": 3307,
+      "database": "ScaleOps",
+      "user": "ScaleOps"
+    },
+    {
+      "shardID": 1,
+      "host": "10.0.116.184",
+      "port": 3308,
+      "database": "ScaleOps",
+      "user": "ScaleOps"
+    },
+    {
+      "shardID": 2,
+      "host": "10.0.116.184",
+      "port": 3309,
+      "database": "ScaleOps",
+      "user": "ScaleOps"
+    }
+  ],
+  "tables": {
+    "customer": {
+      "strategy": "partitioned",
+      "sourceCount": 10,
+      "shardCounts": {
+        "0": 3,
+        "1": 4,
+        "2": 3
+      },
+      "shardTotal": 10,
+      "deltaShardTotalMinusSource": 0,
+      "duplicateKeyCount": 0,
+      "badRouteCount": 0,
+      "ok": true
+    },
+    "address": {
+      "strategy": "partitioned",
+      "sourceCount": 20,
+      "shardCounts": {
+        "0": 6,
+        "1": 8,
+        "2": 6
+      },
+      "shardTotal": 20,
+      "deltaShardTotalMinusSource": 0,
+      "duplicateKeyCount": 0,
+      "badRouteCount": 0,
+      "ok": true
+    },
+    "cartitem": {
+      "strategy": "partitioned",
+      "sourceCount": 12,
+      "shardCounts": {
+        "0": 4,
+        "1": 5,
+        "2": 3
+      },
+      "shardTotal": 12,
+      "deltaShardTotalMinusSource": 0,
+      "duplicateKeyCount": 0,
+      "badRouteCount": 0,
+      "ok": true
+    },
+    "payment": {
+      "strategy": "partitioned",
+      "sourceCount": 12,
+      "shardCounts": {
+        "0": 4,
+        "1": 5,
+        "2": 3
+      },
+      "shardTotal": 12,
+      "deltaShardTotalMinusSource": 0,
+      "duplicateKeyCount": 0,
+      "badRouteCount": 0,
+      "ok": true
+    },
+    "orders": {
+      "strategy": "partitioned",
+      "sourceCount": 12,
+      "shardCounts": {
+        "0": 4,
+        "1": 5,
+        "2": 3
+      },
+      "shardTotal": 12,
+      "deltaShardTotalMinusSource": 0,
+      "duplicateKeyCount": 0,
+      "badRouteCount": 0,
+      "ok": true
+    }
+  },
+  "ok": true,
+  "migratedCounts": {
+    "customer": {
+      "0": 3,
+      "1": 4,
+      "2": 3
+    },
+    "address": {
+      "0": 6,
+      "1": 8,
+      "2": 6
+    },
+    "cartitem": {
+      "0": 4,
+      "1": 5,
+      "2": 3
+    },
+    "payment": {
+      "0": 4,
+      "1": 5,
+      "2": 3
+    },
+    "orders": {
+      "0": 4,
+      "1": 5,
+      "2": 3
+    }
+  }
+}

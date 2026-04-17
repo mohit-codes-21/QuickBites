@@ -1,6 +1,0 @@
-endpoint,avg_response_ms,p95_response_ms,error_rate_percent,rps
-GET /api/menu-items,881.842,1422.253,0.0,14.038
-GET /api/menu-items?search=single,317.413,453.526,0.0,12.762
-POST /api/menu-items,1624.641,3653.763,0.0,8.523
-PUT /api/menu-items/<rid>/<iid>,991.745,2976.474,0.0,4.968
-DELETE /api/menu-items/<rid>/<iid>,843.913,2596.822,0.0,5.287

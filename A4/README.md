@@ -217,6 +217,64 @@ This repo includes:
 - SQL indexes targeting the app's most frequent WHERE/JOIN/ORDER BY patterns: `sql/indexes.sql`
 - A reproducible benchmark runner that captures timings + `EXPLAIN` plans before vs after indexing: `app/benchmark_indexing.py`
 
+---
+
+## Sharding (SubTask 2)
+
+Team ScaleOps sharding is implemented with hash routing on `customerID`:
+
+- Formula: `shard_id = customerID % 3`
+- `customerID` tables are directly sharded (Customer, Address, CartItem, Payment, Orders)
+- Remaining tables stay local in monolith DB (Member, DeliveryPartner, Restaurant, MenuItem, OrderItem, Delivery_Assignments, OrderRating, MenuItemRating)
+- Cluster: `10.0.116.184` on ports `3307, 3308, 3309`
+- Team credentials: user/database `ScaleOps`, password `password@123`
+
+Detailed runbook is available in `docs/subtask2_sharding_scaleops.md`.
+Query routing details are in `docs/subtask3_query_routing_scaleops.md`.
+
+Quick commands:
+
+```bash
+python shard_admin.py setup --drop-existing
+python shard_admin.py migrate
+python shard_admin.py verify
+```
+
+Manual SQL checks per shard are available in `sql/subtask2_verify_shards.sql`.
+
+Or full pipeline:
+
+```bash
+python shard_admin.py full --drop-existing
+```
+
+New sharded API endpoints added:
+
+- `GET /api/sharded/shards`
+- `GET /api/sharded/route/customer/<customerID>`
+- `POST /api/sharded/customers`
+- `GET /api/sharded/customers/<customerID>`
+- `GET /api/sharded/customers/range?start=<id>&end=<id>&limit=<n>`
+
+SubTask 3 query routing is implemented on existing customer-facing endpoints as well:
+
+- Lookup routing (single key):
+	- `GET /api/customer/orders`
+	- `GET /api/customer/addresses`
+	- `GET /api/customer/cart`
+	- `GET /api/customer/payments/last`
+- Insert/update routing:
+	- `POST /api/customer/addresses`
+	- `PUT /api/customer/addresses/select`
+	- `PUT /api/customer/cart/item`
+	- `DELETE /api/customer/cart/item`
+	- `DELETE /api/customer/cart`
+	- `POST /api/customer/cart/payment-demo`
+	- `POST /api/customer/cart/payment-demo/recheck`
+	- `POST /api/customer/membership/purchase`
+- Range fan-out routing (scatter-gather + merge):
+	- `GET /api/customer/orders?startCustomerID=<id>&endCustomerID=<id>&limit=<n>` (Admin)
+
 ### Apply Indexes (SubTask 4)
 
 After importing `sql/SQL_Dump.sql`, apply the indexes:

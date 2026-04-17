@@ -2,6 +2,7 @@ import json
 import os
 import secrets
 import math
+import sys
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from functools import wraps
@@ -11,6 +12,12 @@ import bcrypt
 import mysql.connector
 from flask import Flask, jsonify, render_template, request
 from mysql.connector import Error
+
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+
+from shard_router import ShardRouter, ShardRoutingError
 
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -402,6 +409,59 @@ def close_request_connection():
         request.db_connection = None
 
 
+def _get_customer_shard_context(customer_id):
+    router = ShardRouter()
+    shard_id, shard_connection = router.connect_for_customer(int(customer_id))
+    tables = {
+        "customer": router.table_name("customer", shard_id),
+        "address": router.table_name("address", shard_id),
+        "cartitem": router.table_name("cartitem", shard_id),
+        "payment": router.table_name("payment", shard_id),
+        "orders": router.table_name("orders", shard_id),
+    }
+    return shard_id, shard_connection, tables
+
+
+def _fetch_restaurant_name_map(connection, restaurant_ids):
+    ids = sorted({int(rid) for rid in restaurant_ids if rid is not None})
+    if not ids:
+        return {}
+
+    placeholders = ",".join(["%s"] * len(ids))
+    cursor = connection.cursor(dictionary=True)
+    cursor.execute(
+        f"""
+        SELECT restaurantID, name
+        FROM Restaurant
+        WHERE restaurantID IN ({placeholders}) AND isDeleted = 0
+        """,
+        tuple(ids),
+    )
+    return {int(row["restaurantID"]): row["name"] for row in cursor.fetchall()}
+
+
+def _fetch_menu_item_map(connection, restaurant_item_pairs):
+    pairs = sorted({(int(rid), int(iid)) for rid, iid in restaurant_item_pairs if rid is not None and iid is not None})
+    if not pairs:
+        return {}
+
+    where_clause = " OR ".join(["(restaurantID = %s AND itemID = %s)"] * len(pairs))
+    params = []
+    for rid, iid in pairs:
+        params.extend([rid, iid])
+
+    cursor = connection.cursor(dictionary=True)
+    cursor.execute(
+        f"""
+        SELECT restaurantID, itemID, name, appPrice, discontinued, isAvailable
+        FROM MenuItem
+        WHERE {where_clause}
+        """,
+        tuple(params),
+    )
+    return {(int(row["restaurantID"]), int(row["itemID"])): row for row in cursor.fetchall()}
+
+
 def get_restaurant_by_member_email(connection, member_email):
     cursor = connection.cursor(dictionary=True)
     cursor.execute(
@@ -524,24 +584,68 @@ def recalc_order_linked_aggregate_ratings(connection, order_id):
         recalc_delivery_partner_average_rating(connection, assignment_row["PartnerID"])
 
 
-def calculate_customer_cart_total(connection, customer_id):
-    cursor = connection.cursor(dictionary=True)
-    cursor.execute(
-        """
-        SELECT COALESCE(SUM(ci.quantity * mi.appPrice), 0) AS total
-        FROM CartItem ci
-        JOIN MenuItem mi ON mi.restaurantID = ci.restaurantID AND mi.itemID = ci.itemID
-        WHERE ci.customerID = %s
-        """,
-        (customer_id,),
+def calculate_customer_cart_total(connection, customer_id, shard_connection=None, tables=None):
+    owns_connection = False
+    try:
+        if shard_connection is None or tables is None:
+            _shard_id, shard_connection, tables = _get_customer_shard_context(customer_id)
+            owns_connection = True
+
+        shard_cursor = shard_connection.cursor(dictionary=True)
+        shard_cursor.execute(
+            f"""
+            SELECT restaurantID, itemID, quantity
+            FROM {tables['cartitem']}
+            WHERE customerID = %s
+            """,
+            (customer_id,),
+        )
+        cart_rows = shard_cursor.fetchall()
+        if not cart_rows:
+            return 0.0
+
+        menu_map = _fetch_menu_item_map(
+            connection,
+            [(row["restaurantID"], row["itemID"]) for row in cart_rows],
+        )
+
+        total = 0.0
+        for row in cart_rows:
+            key = (int(row["restaurantID"]), int(row["itemID"]))
+            menu_row = menu_map.get(key)
+            if not menu_row:
+                continue
+            total += int(row.get("quantity") or 0) * float(menu_row.get("appPrice") or 0)
+
+        return round(total, 2)
+    finally:
+        if owns_connection and shard_connection and shard_connection.is_connected():
+            shard_connection.close()
+
+
+def update_customer_cart_total(connection, customer_id, shard_connection=None, tables=None):
+    owns_connection = False
+    if shard_connection is None or tables is None:
+        _shard_id, shard_connection, tables = _get_customer_shard_context(customer_id)
+        owns_connection = True
+
+    total = calculate_customer_cart_total(
+        connection,
+        customer_id,
+        shard_connection=shard_connection,
+        tables=tables,
     )
-    return float(cursor.fetchone()["total"])
-
-
-def update_customer_cart_total(connection, customer_id):
-    total = calculate_customer_cart_total(connection, customer_id)
-    cursor = connection.cursor()
-    cursor.execute("UPDATE Customer SET cartTotalAmount = %s WHERE customerID = %s", (total, customer_id))
+    try:
+        cursor = shard_connection.cursor()
+        cursor.execute(
+            f"UPDATE {tables['customer']} SET cartTotalAmount = %s WHERE customerID = %s",
+            (total, customer_id),
+        )
+        if owns_connection:
+            shard_connection.commit()
+    finally:
+        if owns_connection and shard_connection and shard_connection.is_connected():
+            shard_connection.close()
     return total
 
 
@@ -558,17 +662,24 @@ def loyalty_discount_percent_for_tier(loyalty_tier, membership):
 
 
 def get_customer_loyalty_context(connection, customer_id):
-    cursor = connection.cursor(dictionary=True)
-    cursor.execute(
-        """
-        SELECT loyaltyTier, membership
-        FROM Customer
-        WHERE customerID = %s
-        LIMIT 1
-        """,
-        (customer_id,),
-    )
-    row = cursor.fetchone() or {"loyaltyTier": 1, "membership": 0}
+    shard_connection = None
+    try:
+        _shard_id, shard_connection, tables = _get_customer_shard_context(customer_id)
+        cursor = shard_connection.cursor(dictionary=True)
+        cursor.execute(
+            f"""
+            SELECT loyaltyTier, membership
+            FROM {tables['customer']}
+            WHERE customerID = %s
+            LIMIT 1
+            """,
+            (customer_id,),
+        )
+        row = cursor.fetchone() or {"loyaltyTier": 1, "membership": 0}
+    finally:
+        if shard_connection and shard_connection.is_connected():
+            shard_connection.close()
+
     tier = int(row.get("loyaltyTier") or 1)
     membership = int(row.get("membership") or 0)
     discount_percent = loyalty_discount_percent_for_tier(tier, membership)
@@ -588,80 +699,100 @@ def calculate_discounted_total(subtotal_amount, discount_percent):
 
 
 def apply_loyalty_tier_progression(connection, customer_id, actor_member_id, trigger):
-    cursor = connection.cursor(dictionary=True)
-    cursor.execute(
-        """
-        SELECT COUNT(*) AS successful_orders
-        FROM Orders o
-        WHERE o.customerID = %s
-          AND EXISTS (
-            SELECT 1 FROM Payment p
-            WHERE p.paymentID = o.paymentID
-              AND p.status = 'Success'
-              AND p.paymentFor = 'Order'
-          )
-        """,
-        (customer_id,),
-    )
-    successful_count = int((cursor.fetchone() or {}).get("successful_orders", 0) or 0)
-
-    if successful_count <= 0 or successful_count % 10 != 0:
-        return
-
-    cursor_update = connection.cursor()
-    cursor_update.execute(
-        """
-        UPDATE Customer
-        SET loyaltyTier = LEAST(5, loyaltyTier + 1)
-        WHERE customerID = %s AND membership = 1 AND loyaltyTier < 5
-        """,
-        (customer_id,),
-    )
-
-    if cursor_update.rowcount > 0:
-        write_audit_log(
-            connection,
-            actor_member_id,
-            "UPDATE",
-            "Customer",
-            customer_id,
-            {
-                "reason": "loyalty_tier_increment",
-                "trigger": trigger,
-                "successful_orders": successful_count,
-            },
+    shard_connection = None
+    try:
+        _shard_id, shard_connection, tables = _get_customer_shard_context(customer_id)
+        cursor = shard_connection.cursor(dictionary=True)
+        cursor.execute(
+            f"""
+            SELECT COUNT(*) AS successful_orders
+            FROM {tables['orders']} o
+            WHERE o.customerID = %s
+              AND EXISTS (
+                SELECT 1 FROM {tables['payment']} p
+                WHERE p.paymentID = o.paymentID
+                  AND p.status = 'Success'
+                  AND p.paymentFor = 'Order'
+              )
+            """,
+            (customer_id,),
         )
+        successful_count = int((cursor.fetchone() or {}).get("successful_orders", 0) or 0)
+
+        if successful_count <= 0 or successful_count % 10 != 0:
+            return
+
+        cursor_update = shard_connection.cursor()
+        cursor_update.execute(
+            f"""
+            UPDATE {tables['customer']}
+            SET loyaltyTier = LEAST(5, loyaltyTier + 1)
+            WHERE customerID = %s AND membership = 1 AND loyaltyTier < 5
+            """,
+            (customer_id,),
+        )
+
+        if cursor_update.rowcount > 0:
+            write_audit_log(
+                connection,
+                actor_member_id,
+                "UPDATE",
+                "Customer",
+                customer_id,
+                {
+                    "reason": "loyalty_tier_increment",
+                    "trigger": trigger,
+                    "successful_orders": successful_count,
+                },
+            )
+
+        shard_connection.commit()
+    finally:
+        if shard_connection and shard_connection.is_connected():
+            shard_connection.close()
 
 
 def get_selected_address_id(connection, customer_id):
-    cursor = connection.cursor(dictionary=True)
-    cursor.execute(
-        """
-        SELECT addressID
-        FROM Address
-        WHERE customerID = %s AND isSaved = 1
-        ORDER BY addressID
-        LIMIT 1
-        """,
-        (customer_id,),
-    )
-    row = cursor.fetchone()
-    return row["addressID"] if row else None
+    shard_connection = None
+    try:
+        _shard_id, shard_connection, tables = _get_customer_shard_context(customer_id)
+        cursor = shard_connection.cursor(dictionary=True)
+        cursor.execute(
+            f"""
+            SELECT addressID
+            FROM {tables['address']}
+            WHERE customerID = %s AND isSaved = 1
+            ORDER BY addressID
+            LIMIT 1
+            """,
+            (customer_id,),
+        )
+        row = cursor.fetchone()
+        return row["addressID"] if row else None
+    finally:
+        if shard_connection and shard_connection.is_connected():
+            shard_connection.close()
 
 
 def get_selected_address_location(connection, customer_id):
-    cursor = connection.cursor(dictionary=True)
-    cursor.execute(
-        """
-        SELECT addressID, latitude, longitude
-        FROM Address
-        WHERE customerID = %s AND isSaved = 1
-        ORDER BY addressID
-        LIMIT 1
-        """,
-        (customer_id,),
-    )
-    return cursor.fetchone()
+    shard_connection = None
+    try:
+        _shard_id, shard_connection, tables = _get_customer_shard_context(customer_id)
+        cursor = shard_connection.cursor(dictionary=True)
+        cursor.execute(
+            f"""
+            SELECT addressID, latitude, longitude
+            FROM {tables['address']}
+            WHERE customerID = %s AND isSaved = 1
+            ORDER BY addressID
+            LIMIT 1
+            """,
+            (customer_id,),
+        )
+        return cursor.fetchone()
+    finally:
+        if shard_connection and shard_connection.is_connected():
+            shard_connection.close()
 
 
 def haversine_distance_km(lat1, lon1, lat2, lon2):
@@ -701,32 +832,56 @@ def get_restaurant_distance_from_selected_address(connection, customer_id, resta
 
 
 def expire_pending_order_payments(connection, customer_id=None):
-    cursor = connection.cursor()
-    if customer_id is None:
-        cursor.execute(
-            """
-            UPDATE Payment
-            SET status = 'Failed'
-            WHERE paymentFor = 'Order'
-              AND status = 'Pending'
-                            AND paymentType = 'OnQuickBites'
-              AND transactionTime <= (NOW() - INTERVAL 2 MINUTE)
-            """
-        )
-    else:
-        cursor.execute(
-            """
-            UPDATE Payment
-            SET status = 'Failed'
-            WHERE paymentFor = 'Order'
-              AND status = 'Pending'
-              AND customerID = %s
-                            AND paymentType = 'OnQuickBites'
-              AND transactionTime <= (NOW() - INTERVAL 2 MINUTE)
-            """,
-            (customer_id,),
-        )
-    return cursor.rowcount
+    router = ShardRouter()
+
+    if customer_id is not None:
+        shard_connection = None
+        try:
+            shard_id, shard_connection = router.connect_for_customer(int(customer_id))
+            payment_table = router.table_name("payment", shard_id)
+            cursor = shard_connection.cursor()
+            cursor.execute(
+                f"""
+                UPDATE {payment_table}
+                SET status = 'Failed'
+                WHERE paymentFor = 'Order'
+                  AND status = 'Pending'
+                  AND customerID = %s
+                  AND paymentType = 'OnQuickBites'
+                  AND transactionTime <= (NOW() - INTERVAL 2 MINUTE)
+                """,
+                (customer_id,),
+            )
+            shard_connection.commit()
+            return cursor.rowcount
+        finally:
+            if shard_connection and shard_connection.is_connected():
+                shard_connection.close()
+
+    total_expired = 0
+    for shard_id in range(router.num_shards):
+        shard_connection = None
+        try:
+            shard_connection = router.connect_to_shard(shard_id)
+            payment_table = router.table_name("payment", shard_id)
+            cursor = shard_connection.cursor()
+            cursor.execute(
+                f"""
+                UPDATE {payment_table}
+                SET status = 'Failed'
+                WHERE paymentFor = 'Order'
+                  AND status = 'Pending'
+                  AND paymentType = 'OnQuickBites'
+                  AND transactionTime <= (NOW() - INTERVAL 2 MINUTE)
+                """
+            )
+            total_expired += int(cursor.rowcount or 0)
+            shard_connection.commit()
+        finally:
+            if shard_connection and shard_connection.is_connected():
+                shard_connection.close()
+
+    return total_expired
 
 
 @app.before_request
@@ -1368,8 +1523,17 @@ def get_portfolio(member_id):
         )
         roles = [row["roleName"] for row in cursor.fetchall()]
 
-        cursor.execute("SELECT * FROM Customer WHERE customerID = %s", (member_id,))
-        customer_data = cursor.fetchone()
+        customer_data = None
+        shard_connection = None
+        try:
+            _shard_id, shard_connection, tables = _get_customer_shard_context(member_id)
+            shard_cursor = shard_connection.cursor(dictionary=True)
+            shard_cursor.execute(f"SELECT * FROM {tables['customer']} WHERE customerID = %s", (member_id,))
+            customer_data = shard_cursor.fetchone()
+        finally:
+            if shard_connection and shard_connection.is_connected():
+                shard_connection.close()
+
         if customer_data:
             customer_data["membershipDiscount"] = loyalty_discount_percent_for_tier(
                 customer_data.get("loyaltyTier"),
@@ -1401,30 +1565,90 @@ def customer_orders():
     connection = request.db_connection
     current_user = request.current_user
 
+    is_admin = "Admin" in current_user.get("roles", [])
     target_member_id = current_user["memberID"]
-    if "Admin" in current_user.get("roles", []):
+    if is_admin:
         target_member_id = request.args.get("memberID", default=target_member_id, type=int)
 
+    start_customer_id = request.args.get("startCustomerID", type=int)
+    end_customer_id = request.args.get("endCustomerID", type=int)
+    limit = request.args.get("limit", default=50, type=int)
+    limit = min(max(limit, 1), 500)
+
     try:
-        expired_count = expire_pending_order_payments(connection, target_member_id)
+        expired_count = expire_pending_order_payments(connection, target_member_id if not (is_admin and start_customer_id is not None and end_customer_id is not None) else None)
         if expired_count > 0:
             connection.commit()
 
-        cursor = connection.cursor(dictionary=True)
-        cursor.execute(
-            """
-            SELECT o.orderID, o.orderTime, o.orderStatus, o.totalAmount,
-                   r.name AS restaurantName, p.status AS paymentStatus
-            FROM Orders o
-            JOIN Restaurant r ON r.restaurantID = o.restaurantID
-            LEFT JOIN Payment p ON p.paymentID = o.paymentID
-            WHERE o.customerID = %s
-            ORDER BY o.orderTime DESC
-            LIMIT 50
-            """,
-            (target_member_id,),
-        )
-        rows = cursor.fetchall()
+        rows = []
+        if is_admin and start_customer_id is not None and end_customer_id is not None:
+            if start_customer_id > end_customer_id:
+                close_request_connection()
+                return json_response(status=400, message="startCustomerID must be <= endCustomerID")
+
+            router = ShardRouter()
+            for shard_id in range(router.num_shards):
+                shard_connection = None
+                try:
+                    shard_connection = router.connect_to_shard(shard_id)
+                    orders_table = router.table_name("orders", shard_id)
+                    payment_table = router.table_name("payment", shard_id)
+
+                    shard_cursor = shard_connection.cursor(dictionary=True)
+                    shard_cursor.execute(
+                        f"""
+                        SELECT o.orderID, o.orderTime, o.orderStatus, o.totalAmount,
+                               o.restaurantID, o.customerID,
+                               p.status AS paymentStatus
+                        FROM {orders_table} o
+                        LEFT JOIN {payment_table} p ON p.paymentID = o.paymentID
+                        WHERE o.customerID BETWEEN %s AND %s
+                        ORDER BY o.orderTime DESC
+                        LIMIT %s
+                        """,
+                        (start_customer_id, end_customer_id, limit),
+                    )
+                    shard_rows = shard_cursor.fetchall()
+                    for row in shard_rows:
+                        row["shardID"] = shard_id
+                    rows.extend(shard_rows)
+                finally:
+                    if shard_connection and shard_connection.is_connected():
+                        shard_connection.close()
+
+            rows.sort(key=lambda r: r.get("orderTime") or datetime.min, reverse=True)
+            rows = rows[:limit]
+        else:
+            shard_connection = None
+            try:
+                shard_id, shard_connection, tables = _get_customer_shard_context(target_member_id)
+                shard_cursor = shard_connection.cursor(dictionary=True)
+                shard_cursor.execute(
+                    f"""
+                    SELECT o.orderID, o.orderTime, o.orderStatus, o.totalAmount,
+                           o.restaurantID, o.customerID,
+                           p.status AS paymentStatus
+                    FROM {tables['orders']} o
+                    LEFT JOIN {tables['payment']} p ON p.paymentID = o.paymentID
+                    WHERE o.customerID = %s
+                    ORDER BY o.orderTime DESC
+                    LIMIT %s
+                    """,
+                    (target_member_id, limit),
+                )
+                rows = shard_cursor.fetchall()
+                for row in rows:
+                    row["shardID"] = shard_id
+            finally:
+                if shard_connection and shard_connection.is_connected():
+                    shard_connection.close()
+
+        restaurant_name_map = _fetch_restaurant_name_map(connection, [row.get("restaurantID") for row in rows])
+        for row in rows:
+            restaurant_id = int(row.get("restaurantID") or 0)
+            row["restaurantName"] = restaurant_name_map.get(restaurant_id, "Unknown")
+            row.pop("restaurantID", None)
+
         close_request_connection()
         return json_response(rows)
     except Error as exc:
@@ -1862,12 +2086,14 @@ def list_customer_addresses():
     connection = request.db_connection
     member_id = request.current_user["memberID"]
 
+    shard_connection = None
     try:
-        cursor = connection.cursor(dictionary=True)
+        _shard_id, shard_connection, tables = _get_customer_shard_context(member_id)
+        cursor = shard_connection.cursor(dictionary=True)
         cursor.execute(
-            """
+            f"""
             SELECT addressID, addressLine, city, zipCode, label, latitude, longitude, isSaved
-            FROM Address
+            FROM {tables['address']}
             WHERE customerID = %s
             ORDER BY addressID
             """,
@@ -1879,6 +2105,9 @@ def list_customer_addresses():
     except Error as exc:
         close_request_connection()
         return json_response(status=500, message=f"Database error: {exc}")
+    finally:
+        if shard_connection and shard_connection.is_connected():
+            shard_connection.close()
 
 
 @app.post("/api/customer/addresses")
@@ -1900,11 +2129,13 @@ def create_customer_address():
         close_request_connection()
         return json_response(status=400, message="addressLine, city, and zipCode are required")
 
+    shard_connection = None
     try:
-        cursor = connection.cursor(dictionary=True)
+        _shard_id, shard_connection, tables = _get_customer_shard_context(member_id)
+        cursor = shard_connection.cursor(dictionary=True)
         next_address_id = allocate_next_id(
-            connection,
-            "Address",
+            shard_connection,
+            tables["address"],
             "addressID",
             where_sql="customerID = %s",
             where_params=(member_id,),
@@ -1912,12 +2143,12 @@ def create_customer_address():
         )
 
         if make_selected:
-            cursor.execute("UPDATE Address SET isSaved = 0 WHERE customerID = %s", (member_id,))
+            cursor.execute(f"UPDATE {tables['address']} SET isSaved = 0 WHERE customerID = %s", (member_id,))
 
         selected_value = 1 if make_selected else 0
         cursor.execute(
-            """
-            INSERT INTO Address(customerID, addressID, addressLine, city, zipCode, label, latitude, longitude, isSaved)
+            f"""
+            INSERT INTO {tables['address']}(customerID, addressID, addressLine, city, zipCode, label, latitude, longitude, isSaved)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             """,
             (member_id, next_address_id, address_line, city, zip_code, label, latitude, longitude, selected_value),
@@ -1926,13 +2157,13 @@ def create_customer_address():
         # Auto-select the first address if none is selected yet.
         if not make_selected:
             cursor.execute(
-                """
-                UPDATE Address
+                f"""
+                UPDATE {tables['address']}
                 SET isSaved = 1
                 WHERE customerID = %s AND addressID = %s
                   AND NOT EXISTS (
                       SELECT 1 FROM (
-                          SELECT addressID FROM Address WHERE customerID = %s AND isSaved = 1
+                          SELECT addressID FROM {tables['address']} WHERE customerID = %s AND isSaved = 1
                       ) t
                   )
                 """,
@@ -1945,18 +2176,24 @@ def create_customer_address():
             "INSERT",
             "Address",
             f"{member_id}:{next_address_id}",
-            {"selected": make_selected},
+            {"selected": make_selected, "shardTable": tables["address"]},
         )
 
+        shard_connection.commit()
         connection.commit()
         close_request_connection()
         return json_response(status=201, message="Address added", data={"addressID": next_address_id})
     except (Error, RuntimeError) as exc:
+        if shard_connection and shard_connection.is_connected():
+            shard_connection.rollback()
         connection.rollback()
         close_request_connection()
         if isinstance(exc, RuntimeError):
             return json_response(status=409, message="Address creation is busy. Please retry.")
         return json_response(status=500, message=f"Database error: {exc}")
+    finally:
+        if shard_connection and shard_connection.is_connected():
+            shard_connection.close()
 
 
 @app.put("/api/customer/addresses/select")
@@ -1971,15 +2208,23 @@ def select_customer_address():
         close_request_connection()
         return json_response(status=400, message="addressID is required")
 
+    shard_connection = None
     try:
-        cursor = connection.cursor(dictionary=True)
-        cursor.execute("SELECT 1 FROM Address WHERE customerID = %s AND addressID = %s", (member_id, address_id))
+        _shard_id, shard_connection, tables = _get_customer_shard_context(member_id)
+        cursor = shard_connection.cursor(dictionary=True)
+        cursor.execute(
+            f"SELECT 1 FROM {tables['address']} WHERE customerID = %s AND addressID = %s",
+            (member_id, address_id),
+        )
         if not cursor.fetchone():
             close_request_connection()
             return json_response(status=404, message="Address not found")
 
-        cursor.execute("UPDATE Address SET isSaved = 0 WHERE customerID = %s", (member_id,))
-        cursor.execute("UPDATE Address SET isSaved = 1 WHERE customerID = %s AND addressID = %s", (member_id, address_id))
+        cursor.execute(f"UPDATE {tables['address']} SET isSaved = 0 WHERE customerID = %s", (member_id,))
+        cursor.execute(
+            f"UPDATE {tables['address']} SET isSaved = 1 WHERE customerID = %s AND addressID = %s",
+            (member_id, address_id),
+        )
 
         write_audit_log(
             connection,
@@ -1987,16 +2232,22 @@ def select_customer_address():
             "UPDATE",
             "Address",
             f"{member_id}:{address_id}",
-            {"selected": True},
+            {"selected": True, "shardTable": tables["address"]},
         )
 
+        shard_connection.commit()
         connection.commit()
         close_request_connection()
         return json_response(message="Delivery address selected")
     except Error as exc:
+        if shard_connection and shard_connection.is_connected():
+            shard_connection.rollback()
         connection.rollback()
         close_request_connection()
         return json_response(status=500, message=f"Database error: {exc}")
+    finally:
+        if shard_connection and shard_connection.is_connected():
+            shard_connection.close()
 
 
 @app.get("/api/customer/cart")
@@ -2005,35 +2256,48 @@ def get_customer_cart():
     connection = request.db_connection
     member_id = request.current_user["memberID"]
 
+    shard_connection = None
     try:
         expired_count = expire_pending_order_payments(connection, member_id)
         if expired_count > 0:
             connection.commit()
 
-        cursor = connection.cursor(dictionary=True)
-        cursor.execute(
-            """
-            SELECT ci.customerID, ci.restaurantID, ci.itemID, ci.quantity,
-                   mi.name AS itemName, mi.appPrice,
-                   r.name AS restaurantName
-            FROM CartItem ci
-            JOIN MenuItem mi ON mi.restaurantID = ci.restaurantID AND mi.itemID = ci.itemID
-            JOIN Restaurant r ON r.restaurantID = ci.restaurantID
-            WHERE ci.customerID = %s
-              AND mi.discontinued = 0
-              AND r.isDeleted = 0
-            ORDER BY ci.restaurantID, ci.itemID
+        _shard_id, shard_connection, tables = _get_customer_shard_context(member_id)
+        shard_cursor = shard_connection.cursor(dictionary=True)
+        shard_cursor.execute(
+            f"""
+            SELECT customerID, restaurantID, itemID, quantity
+            FROM {tables['cartitem']}
+            WHERE customerID = %s
+            ORDER BY restaurantID, itemID
             """,
             (member_id,),
         )
-        rows = cursor.fetchall()
+        cart_rows = shard_cursor.fetchall()
+
+        menu_map = _fetch_menu_item_map(
+            connection,
+            [(row["restaurantID"], row["itemID"]) for row in cart_rows],
+        )
+        restaurant_name_map = _fetch_restaurant_name_map(connection, [row["restaurantID"] for row in cart_rows])
 
         items = []
         item_count = 0
         total_amount = 0.0
-        for row in rows:
+        for row in cart_rows:
+            key = (int(row["restaurantID"]), int(row["itemID"]))
+            menu_row = menu_map.get(key)
+            if not menu_row:
+                continue
+            if int(menu_row.get("discontinued") or 0) == 1:
+                continue
+
+            restaurant_name = restaurant_name_map.get(int(row["restaurantID"]))
+            if not restaurant_name:
+                continue
+
             quantity = int(row["quantity"])
-            price = float(row["appPrice"])
+            price = float(menu_row.get("appPrice") or 0)
             line_total = round(quantity * price, 2)
             item_count += quantity
             total_amount += line_total
@@ -2041,8 +2305,8 @@ def get_customer_cart():
                 {
                     "restaurantID": row["restaurantID"],
                     "itemID": row["itemID"],
-                    "name": row["itemName"],
-                    "restaurantName": row["restaurantName"],
+                    "name": menu_row.get("name"),
+                    "restaurantName": restaurant_name,
                     "price": price,
                     "quantity": quantity,
                     "lineTotal": line_total,
@@ -2050,10 +2314,14 @@ def get_customer_cart():
             )
 
         total_amount = round(total_amount, 2)
-        cursor.execute("UPDATE Customer SET cartTotalAmount = %s WHERE customerID = %s", (total_amount, member_id))
+        shard_cursor.execute(
+            f"UPDATE {tables['customer']} SET cartTotalAmount = %s WHERE customerID = %s",
+            (total_amount, member_id),
+        )
 
         loyalty_context = get_customer_loyalty_context(connection, member_id)
         discount_amount, payable_total = calculate_discounted_total(total_amount, loyalty_context["discountPercent"])
+        shard_connection.commit()
         connection.commit()
 
         close_request_connection()
@@ -2069,9 +2337,14 @@ def get_customer_cart():
             }
         )
     except Error as exc:
+        if shard_connection and shard_connection.is_connected():
+            shard_connection.rollback()
         connection.rollback()
         close_request_connection()
         return json_response(status=500, message=f"Database error: {exc}")
+    finally:
+        if shard_connection and shard_connection.is_connected():
+            shard_connection.close()
 
 
 @app.put("/api/customer/cart/item")
@@ -2100,12 +2373,15 @@ def upsert_customer_cart_item():
         return json_response(status=400, message="quantityDelta cannot be 0")
 
     cart_lock_held = False
+    shard_connection = None
     try:
         _acquire_customer_cart_lock(connection, member_id)
         cart_lock_held = True
 
-        cursor = connection.cursor(dictionary=True)
-        cursor.execute(
+        _shard_id, shard_connection, tables = _get_customer_shard_context(member_id)
+
+        global_cursor = connection.cursor(dictionary=True)
+        global_cursor.execute(
             """
                         SELECT mi.restaurantID, mi.itemID, r.isOpen
             FROM MenuItem mi
@@ -2118,7 +2394,7 @@ def upsert_customer_cart_item():
             """,
             (restaurant_id, item_id),
         )
-        item_row = cursor.fetchone()
+        item_row = global_cursor.fetchone()
         if not item_row:
             return json_response(status=404, message="Menu item not found or unavailable")
 
@@ -2133,18 +2409,19 @@ def upsert_customer_cart_item():
                     message=f"This restaurant is {distance_km:.2f} km away from your selected address. Max allowed is 30 km.",
                 )
 
-        cursor.execute(
-            "SELECT quantity FROM CartItem WHERE customerID = %s AND restaurantID = %s AND itemID = %s FOR UPDATE",
+        shard_cursor = shard_connection.cursor(dictionary=True)
+        shard_cursor.execute(
+            f"SELECT quantity FROM {tables['cartitem']} WHERE customerID = %s AND restaurantID = %s AND itemID = %s FOR UPDATE",
             (member_id, restaurant_id, item_id),
         )
-        existing = cursor.fetchone()
+        existing = shard_cursor.fetchone()
 
         if not existing and quantity_delta > 0:
-            cursor.execute(
-                "SELECT restaurantID FROM CartItem WHERE customerID = %s ORDER BY restaurantID LIMIT 1 FOR UPDATE",
+            shard_cursor.execute(
+                f"SELECT restaurantID FROM {tables['cartitem']} WHERE customerID = %s ORDER BY restaurantID LIMIT 1 FOR UPDATE",
                 (member_id,),
             )
-            cart_anchor = cursor.fetchone()
+            cart_anchor = shard_cursor.fetchone()
             if cart_anchor and int(cart_anchor["restaurantID"]) != int(restaurant_id):
                 return json_response(
                     status=409,
@@ -2154,45 +2431,57 @@ def upsert_customer_cart_item():
         if existing:
             new_quantity = int(existing["quantity"]) + quantity_delta
             if new_quantity <= 0:
-                cursor.execute(
-                    "DELETE FROM CartItem WHERE customerID = %s AND restaurantID = %s AND itemID = %s",
+                shard_cursor.execute(
+                    f"DELETE FROM {tables['cartitem']} WHERE customerID = %s AND restaurantID = %s AND itemID = %s",
                     (member_id, restaurant_id, item_id),
                 )
                 action = "DELETE"
             else:
-                cursor.execute(
-                    "UPDATE CartItem SET quantity = %s WHERE customerID = %s AND restaurantID = %s AND itemID = %s",
+                shard_cursor.execute(
+                    f"UPDATE {tables['cartitem']} SET quantity = %s WHERE customerID = %s AND restaurantID = %s AND itemID = %s",
                     (new_quantity, member_id, restaurant_id, item_id),
                 )
                 action = "UPDATE"
         else:
             if quantity_delta < 0:
                 return json_response(status=400, message="Cannot decrease quantity for an item not in cart")
-            cursor.execute(
-                "INSERT INTO CartItem(customerID, restaurantID, itemID, quantity) VALUES (%s, %s, %s, %s)",
+            shard_cursor.execute(
+                f"INSERT INTO {tables['cartitem']}(customerID, restaurantID, itemID, quantity) VALUES (%s, %s, %s, %s)",
                 (member_id, restaurant_id, item_id, quantity_delta),
             )
             action = "INSERT"
 
-        total = update_customer_cart_total(connection, member_id)
+        total = update_customer_cart_total(
+            connection,
+            member_id,
+            shard_connection=shard_connection,
+            tables=tables,
+        )
         write_audit_log(
             connection,
             member_id,
             action,
             "CartItem",
             f"{member_id}:{restaurant_id}:{item_id}",
-            {"quantityDelta": quantity_delta, "cartTotalAmount": total},
+            {"quantityDelta": quantity_delta, "cartTotalAmount": total, "shardTable": tables["cartitem"]},
         )
 
+        shard_connection.commit()
         connection.commit()
         return json_response(message="Cart updated successfully")
     except RuntimeError:
+        if shard_connection and shard_connection.is_connected():
+            shard_connection.rollback()
         connection.rollback()
         return json_response(status=409, message="Cart is currently being updated. Please retry.")
     except Error as exc:
+        if shard_connection and shard_connection.is_connected():
+            shard_connection.rollback()
         connection.rollback()
         return json_response(status=500, message=f"Database error: {exc}")
     finally:
+        if shard_connection and shard_connection.is_connected():
+            shard_connection.close()
         if cart_lock_held and connection and connection.is_connected():
             try:
                 _release_customer_cart_lock(connection, member_id)
@@ -2216,38 +2505,54 @@ def delete_customer_cart_item():
         return json_response(status=400, message="restaurantID and itemID are required")
 
     cart_lock_held = False
+    shard_connection = None
     try:
         _acquire_customer_cart_lock(connection, member_id)
         cart_lock_held = True
 
-        cursor = connection.cursor()
+        _shard_id, shard_connection, tables = _get_customer_shard_context(member_id)
+
+        cursor = shard_connection.cursor()
         cursor.execute(
-            "DELETE FROM CartItem WHERE customerID = %s AND restaurantID = %s AND itemID = %s",
+            f"DELETE FROM {tables['cartitem']} WHERE customerID = %s AND restaurantID = %s AND itemID = %s",
             (member_id, restaurant_id, item_id),
         )
         if cursor.rowcount == 0:
+            shard_connection.rollback()
             connection.rollback()
             return json_response(status=404, message="Cart item not found")
 
-        total = update_customer_cart_total(connection, member_id)
+        total = update_customer_cart_total(
+            connection,
+            member_id,
+            shard_connection=shard_connection,
+            tables=tables,
+        )
         write_audit_log(
             connection,
             member_id,
             "DELETE",
             "CartItem",
             f"{member_id}:{restaurant_id}:{item_id}",
-            {"removed": True, "cartTotalAmount": total},
+            {"removed": True, "cartTotalAmount": total, "shardTable": tables["cartitem"]},
         )
 
+        shard_connection.commit()
         connection.commit()
         return json_response(message="Cart item removed")
     except RuntimeError:
+        if shard_connection and shard_connection.is_connected():
+            shard_connection.rollback()
         connection.rollback()
         return json_response(status=409, message="Cart is currently being updated. Please retry.")
     except Error as exc:
+        if shard_connection and shard_connection.is_connected():
+            shard_connection.rollback()
         connection.rollback()
         return json_response(status=500, message=f"Database error: {exc}")
     finally:
+        if shard_connection and shard_connection.is_connected():
+            shard_connection.close()
         if cart_lock_held and connection and connection.is_connected():
             try:
                 _release_customer_cart_lock(connection, member_id)
@@ -2263,13 +2568,21 @@ def clear_customer_cart():
     member_id = request.current_user["memberID"]
 
     cart_lock_held = False
+    shard_connection = None
     try:
         _acquire_customer_cart_lock(connection, member_id)
         cart_lock_held = True
 
-        cursor = connection.cursor()
-        cursor.execute("DELETE FROM CartItem WHERE customerID = %s", (member_id,))
-        total = update_customer_cart_total(connection, member_id)
+        _shard_id, shard_connection, tables = _get_customer_shard_context(member_id)
+
+        cursor = shard_connection.cursor()
+        cursor.execute(f"DELETE FROM {tables['cartitem']} WHERE customerID = %s", (member_id,))
+        total = update_customer_cart_total(
+            connection,
+            member_id,
+            shard_connection=shard_connection,
+            tables=tables,
+        )
 
         write_audit_log(
             connection,
@@ -2277,18 +2590,25 @@ def clear_customer_cart():
             "DELETE",
             "CartItem",
             str(member_id),
-            {"clearCart": True, "cartTotalAmount": total},
+            {"clearCart": True, "cartTotalAmount": total, "shardTable": tables["cartitem"]},
         )
 
+        shard_connection.commit()
         connection.commit()
         return json_response(message="Cart cleared")
     except RuntimeError:
+        if shard_connection and shard_connection.is_connected():
+            shard_connection.rollback()
         connection.rollback()
         return json_response(status=409, message="Cart is currently being updated. Please retry.")
     except Error as exc:
+        if shard_connection and shard_connection.is_connected():
+            shard_connection.rollback()
         connection.rollback()
         return json_response(status=500, message=f"Database error: {exc}")
     finally:
+        if shard_connection and shard_connection.is_connected():
+            shard_connection.close()
         if cart_lock_held and connection and connection.is_connected():
             try:
                 _release_customer_cart_lock(connection, member_id)
@@ -2324,16 +2644,55 @@ def customer_payment_demo():
         return json_response(status=400, message="Invalid payment mode. Use online or cod")
 
     cart_lock_held = False
+    shard_connection = None
     try:
         _acquire_customer_cart_lock(connection, member_id)
         cart_lock_held = True
+
+        _shard_id, shard_connection, tables = _get_customer_shard_context(member_id)
+        shard_cursor = shard_connection.cursor(dictionary=True)
 
         expired_count = expire_pending_order_payments(connection, member_id)
         if expired_count > 0:
             connection.commit()
 
-        cursor = connection.cursor(dictionary=True)
-        cart_subtotal = calculate_customer_cart_total(connection, member_id)
+        shard_cursor.execute(
+            f"""
+            SELECT restaurantID, itemID, quantity
+            FROM {tables['cartitem']}
+            WHERE customerID = %s
+            ORDER BY restaurantID, itemID
+            """,
+            (member_id,),
+        )
+        cart_rows = shard_cursor.fetchall()
+
+        menu_map = _fetch_menu_item_map(
+            connection,
+            [(row["restaurantID"], row["itemID"]) for row in cart_rows],
+        )
+
+        enriched_cart_rows = []
+        for row in cart_rows:
+            key = (int(row["restaurantID"]), int(row["itemID"]))
+            menu_row = menu_map.get(key)
+            if not menu_row:
+                continue
+            if int(menu_row.get("discontinued") or 0) == 1:
+                continue
+            enriched_cart_rows.append(
+                {
+                    "restaurantID": int(row["restaurantID"]),
+                    "itemID": int(row["itemID"]),
+                    "quantity": int(row["quantity"]),
+                    "appPrice": float(menu_row.get("appPrice") or 0),
+                }
+            )
+
+        cart_subtotal = round(
+            sum(float(row["quantity"]) * float(row["appPrice"]) for row in enriched_cart_rows),
+            2,
+        )
         if cart_subtotal <= 0:
             close_request_connection()
             return json_response(status=400, message="Cart is empty")
@@ -2341,18 +2700,7 @@ def customer_payment_demo():
         loyalty_context = get_customer_loyalty_context(connection, member_id)
         discount_amount, cart_total = calculate_discounted_total(cart_subtotal, loyalty_context["discountPercent"])
 
-        cursor.execute(
-            """
-            SELECT ci.restaurantID, ci.itemID, ci.quantity, mi.appPrice
-            FROM CartItem ci
-            JOIN MenuItem mi ON mi.restaurantID = ci.restaurantID AND mi.itemID = ci.itemID
-            WHERE ci.customerID = %s
-            ORDER BY ci.restaurantID, ci.itemID
-            """,
-            (member_id,),
-        )
-        cart_rows = cursor.fetchall()
-        restaurant_ids = sorted({int(row["restaurantID"]) for row in cart_rows})
+        restaurant_ids = sorted({int(row["restaurantID"]) for row in enriched_cart_rows})
 
         if len(restaurant_ids) > 1:
             close_request_connection()
@@ -2361,13 +2709,13 @@ def customer_payment_demo():
                 message="Cart must contain items from a single restaurant only",
             )
 
-        payment_id = allocate_next_id(connection, "Payment", "paymentID", seed=0)
+        payment_id = allocate_next_id(shard_connection, tables["payment"], "paymentID", seed=0)
 
         db_status = status_map[status_in]
         db_payment_mode = payment_mode_map[payment_mode_in]
-        cursor.execute(
-            """
-            INSERT INTO Payment(paymentID, customerID, amount, paymentType, status, transactionTime, paymentFor)
+        shard_cursor.execute(
+            f"""
+            INSERT INTO {tables['payment']}(paymentID, customerID, amount, paymentType, status, transactionTime, paymentFor)
             VALUES (%s, %s, %s, %s, %s, NOW(), 'Order')
             """,
             (payment_id, member_id, cart_total, db_payment_mode, db_status),
@@ -2378,6 +2726,7 @@ def customer_payment_demo():
         if should_place_order:
             selected_address_id = get_selected_address_id(connection, member_id)
             if selected_address_id is None:
+                shard_connection.rollback()
                 connection.rollback()
                 close_request_connection()
                 return json_response(
@@ -2387,35 +2736,39 @@ def customer_payment_demo():
                 )
 
             if not restaurant_ids:
+                shard_connection.rollback()
                 connection.rollback()
                 return json_response(status=400, message="Cart is empty")
 
-            next_order_id = allocate_next_id(connection, "Orders", "orderID", seed=0)
+            next_order_id = allocate_next_id(shard_connection, tables["orders"], "orderID", seed=0)
 
             now = ist_now()
             estimated_time = now + timedelta(minutes=45)
             target_restaurant_id = restaurant_ids[0]
 
-            cursor.execute(
+            global_cursor = connection.cursor(dictionary=True)
+            global_cursor.execute(
                 "SELECT isOpen FROM Restaurant WHERE restaurantID = %s AND isDeleted = 0 LIMIT 1",
                 (target_restaurant_id,),
             )
-            restaurant_state = cursor.fetchone()
+            restaurant_state = global_cursor.fetchone()
             if not restaurant_state or int(restaurant_state.get("isOpen", 0)) != 1:
+                shard_connection.rollback()
                 connection.rollback()
                 return json_response(status=400, message="Cannot place order: restaurant is currently closed")
 
             distance_km = get_restaurant_distance_from_selected_address(connection, member_id, target_restaurant_id)
             if distance_km is not None and distance_km > DELIVERY_RADIUS_KM:
+                shard_connection.rollback()
                 connection.rollback()
                 return json_response(
                     status=400,
                     message=f"Cannot place order: restaurant is {distance_km:.2f} km away from your selected address (max 30 km).",
                 )
 
-            cursor.execute(
-                """
-                INSERT INTO Orders(
+            shard_cursor.execute(
+                f"""
+                INSERT INTO {tables['orders']}(
                     orderID, orderTime, estimatedTime, totalAmount, orderStatus,
                     customerID, restaurantID, addressID, paymentID, specialInstruction
                 )
@@ -2434,11 +2787,100 @@ def customer_payment_demo():
                 ),
             )
 
-            for row in cart_rows:
-                cursor.execute(
+            shard_cursor.execute(
+                f"""
+                SELECT addressLine, city, zipCode, label, latitude, longitude, isSaved
+                FROM {tables['address']}
+                WHERE customerID = %s AND addressID = %s
+                LIMIT 1
+                """,
+                (member_id, selected_address_id),
+            )
+            selected_address_row = shard_cursor.fetchone()
+            if not selected_address_row:
+                shard_connection.rollback()
+                connection.rollback()
+                return json_response(status=400, message="Selected address not found")
+
+            global_cursor.execute(
+                """
+                INSERT INTO Address(customerID, addressID, addressLine, city, zipCode, label, latitude, longitude, isSaved)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON DUPLICATE KEY UPDATE
+                    addressLine = VALUES(addressLine),
+                    city = VALUES(city),
+                    zipCode = VALUES(zipCode),
+                    label = VALUES(label),
+                    latitude = VALUES(latitude),
+                    longitude = VALUES(longitude),
+                    isSaved = VALUES(isSaved)
+                """,
+                (
+                    member_id,
+                    selected_address_id,
+                    selected_address_row["addressLine"],
+                    selected_address_row["city"],
+                    selected_address_row["zipCode"],
+                    selected_address_row["label"],
+                    selected_address_row["latitude"],
+                    selected_address_row["longitude"],
+                    selected_address_row["isSaved"],
+                ),
+            )
+
+            global_cursor.execute(
+                """
+                INSERT INTO Payment(paymentID, customerID, amount, paymentType, status, transactionTime, paymentFor)
+                VALUES (%s, %s, %s, %s, %s, %s, 'Order')
+                ON DUPLICATE KEY UPDATE
+                    amount = VALUES(amount),
+                    paymentType = VALUES(paymentType),
+                    status = VALUES(status),
+                    transactionTime = VALUES(transactionTime),
+                    paymentFor = VALUES(paymentFor)
+                """,
+                (payment_id, member_id, cart_total, db_payment_mode, db_status, now),
+            )
+
+            global_cursor.execute(
+                """
+                INSERT INTO Orders(
+                    orderID, orderTime, estimatedTime, totalAmount, orderStatus,
+                    customerID, restaurantID, addressID, paymentID, specialInstruction
+                )
+                VALUES (%s, %s, %s, %s, 'Created', %s, %s, %s, %s, %s)
+                ON DUPLICATE KEY UPDATE
+                    orderTime = VALUES(orderTime),
+                    estimatedTime = VALUES(estimatedTime),
+                    totalAmount = VALUES(totalAmount),
+                    orderStatus = VALUES(orderStatus),
+                    customerID = VALUES(customerID),
+                    restaurantID = VALUES(restaurantID),
+                    addressID = VALUES(addressID),
+                    paymentID = VALUES(paymentID),
+                    specialInstruction = VALUES(specialInstruction)
+                """,
+                (
+                    next_order_id,
+                    now,
+                    estimated_time,
+                    cart_total,
+                    member_id,
+                    target_restaurant_id,
+                    selected_address_id,
+                    payment_id,
+                    str(payload.get("specialInstruction", "")).strip() or None,
+                ),
+            )
+
+            for row in enriched_cart_rows:
+                global_cursor.execute(
                     """
                     INSERT INTO OrderItem(orderID, restaurantID, itemID, quantity, priceAtPurchase)
                     VALUES (%s, %s, %s, %s, %s)
+                    ON DUPLICATE KEY UPDATE
+                        quantity = VALUES(quantity),
+                        priceAtPurchase = VALUES(priceAtPurchase)
                     """,
                     (
                         next_order_id,
@@ -2449,8 +2891,11 @@ def customer_payment_demo():
                     ),
                 )
 
-            cursor.execute("DELETE FROM CartItem WHERE customerID = %s", (member_id,))
-            update_customer_cart_total(connection, member_id)
+            shard_cursor.execute(f"DELETE FROM {tables['cartitem']} WHERE customerID = %s", (member_id,))
+            shard_cursor.execute(
+                f"UPDATE {tables['customer']} SET cartTotalAmount = 0 WHERE customerID = %s",
+                (member_id,),
+            )
             apply_loyalty_tier_progression(connection, member_id, member_id, "order_placed")
 
             write_audit_log(
@@ -2464,6 +2909,7 @@ def customer_payment_demo():
                     "addressID": selected_address_id,
                     "paymentID": payment_id,
                     "status": "Created",
+                    "shardTable": tables["orders"],
                 },
             )
 
@@ -2473,9 +2919,16 @@ def customer_payment_demo():
             "INSERT",
             "Payment",
             payment_id,
-            {"status": db_status, "amount": cart_total, "paymentMode": db_payment_mode, "demo": True},
+            {
+                "status": db_status,
+                "amount": cart_total,
+                "paymentMode": db_payment_mode,
+                "demo": True,
+                "shardTable": tables["payment"],
+            },
         )
 
+        shard_connection.commit()
         connection.commit()
         close_request_connection()
         return json_response(
@@ -2499,12 +2952,18 @@ def customer_payment_demo():
             ),
         )
     except RuntimeError:
+        if shard_connection and shard_connection.is_connected():
+            shard_connection.rollback()
         connection.rollback()
         return json_response(status=409, message="Checkout is currently busy. Please retry.")
     except Error as exc:
+        if shard_connection and shard_connection.is_connected():
+            shard_connection.rollback()
         connection.rollback()
         return json_response(status=500, message=f"Database error: {exc}")
     finally:
+        if shard_connection and shard_connection.is_connected():
+            shard_connection.close()
         if cart_lock_held and connection and connection.is_connected():
             try:
                 _release_customer_cart_lock(connection, member_id)
@@ -2525,12 +2984,14 @@ def recheck_processing_payment():
         close_request_connection()
         return json_response(status=400, message="paymentID is required")
 
+    shard_connection = None
     try:
-        cursor = connection.cursor(dictionary=True)
+        _shard_id, shard_connection, tables = _get_customer_shard_context(member_id)
+        cursor = shard_connection.cursor(dictionary=True)
         cursor.execute(
-            """
+            f"""
             SELECT paymentID, status, transactionTime
-            FROM Payment
+            FROM {tables['payment']}
             WHERE paymentID = %s AND customerID = %s AND paymentFor = 'Order'
             """,
             (payment_id, member_id),
@@ -2548,9 +3009,9 @@ def recheck_processing_payment():
             )
 
         cursor.execute(
-            """
+            f"""
             SELECT TIMESTAMPDIFF(SECOND, transactionTime, NOW()) AS elapsedSeconds
-            FROM Payment
+            FROM {tables['payment']}
             WHERE paymentID = %s AND customerID = %s
             """,
             (payment_id, member_id),
@@ -2558,7 +3019,7 @@ def recheck_processing_payment():
         elapsed = int(cursor.fetchone()["elapsedSeconds"] or 0)
         if elapsed >= 120:
             cursor.execute(
-                "UPDATE Payment SET status = 'Failed' WHERE paymentID = %s AND customerID = %s",
+                f"UPDATE {tables['payment']} SET status = 'Failed' WHERE paymentID = %s AND customerID = %s",
                 (payment_id, member_id),
             )
             write_audit_log(
@@ -2567,8 +3028,9 @@ def recheck_processing_payment():
                 "UPDATE",
                 "Payment",
                 payment_id,
-                {"status": "Failed", "reason": "processing_timeout"},
+                {"status": "Failed", "reason": "processing_timeout", "shardTable": tables["payment"]},
             )
+            shard_connection.commit()
             connection.commit()
             close_request_connection()
             return json_response(
@@ -2583,9 +3045,14 @@ def recheck_processing_payment():
             message="Payment is still processing",
         )
     except Error as exc:
+        if shard_connection and shard_connection.is_connected():
+            shard_connection.rollback()
         connection.rollback()
         close_request_connection()
         return json_response(status=500, message=f"Database error: {exc}")
+    finally:
+        if shard_connection and shard_connection.is_connected():
+            shard_connection.close()
 
 
 @app.get("/api/customer/payments/last")
@@ -2594,16 +3061,18 @@ def get_last_customer_payment_status():
     connection = request.db_connection
     member_id = request.current_user["memberID"]
 
+    shard_connection = None
     try:
         expired_count = expire_pending_order_payments(connection, member_id)
         if expired_count > 0:
             connection.commit()
 
-        cursor = connection.cursor(dictionary=True)
+        _shard_id, shard_connection, tables = _get_customer_shard_context(member_id)
+        cursor = shard_connection.cursor(dictionary=True)
         cursor.execute(
-            """
+            f"""
             SELECT paymentID, amount, paymentType, status, transactionTime
-            FROM Payment
+            FROM {tables['payment']}
             WHERE customerID = %s AND paymentFor = 'Order'
             ORDER BY transactionTime DESC, paymentID DESC
             LIMIT 1
@@ -2636,9 +3105,14 @@ def get_last_customer_payment_status():
             }
         )
     except Error as exc:
+        if shard_connection and shard_connection.is_connected():
+            shard_connection.rollback()
         connection.rollback()
         close_request_connection()
         return json_response(status=500, message=f"Database error: {exc}")
+    finally:
+        if shard_connection and shard_connection.is_connected():
+            shard_connection.close()
 
 
 @app.post("/api/customer/membership/purchase")
@@ -2654,12 +3128,14 @@ def purchase_membership():
         close_request_connection()
         return json_response(status=400, message="Membership purchase only available via Online (QuickBites) payment")
 
+    shard_connection = None
     try:
-        cursor = connection.cursor(dictionary=True)
+        _shard_id, shard_connection, tables = _get_customer_shard_context(member_id)
+        cursor = shard_connection.cursor(dictionary=True)
         cursor.execute(
-            """
+            f"""
             SELECT membership, membershipDueDate
-            FROM Customer
+            FROM {tables['customer']}
             WHERE customerID = %s
             """,
             (member_id,),
@@ -2681,14 +3157,14 @@ def purchase_membership():
                 )}
             )
 
-        payment_id = allocate_next_id(connection, "Payment", "paymentID", seed=0)
+        payment_id = allocate_next_id(shard_connection, tables["payment"], "paymentID", seed=0)
 
         membership_amount = 500
         db_payment_mode = "OnQuickBites"
 
         cursor.execute(
-            """
-            INSERT INTO Payment(paymentID, customerID, amount, paymentType, status, transactionTime, paymentFor)
+            f"""
+            INSERT INTO {tables['payment']}(paymentID, customerID, amount, paymentType, status, transactionTime, paymentFor)
             VALUES (%s, %s, %s, %s, 'Success', NOW(), 'Membership')
             """,
             (payment_id, member_id, membership_amount, db_payment_mode),
@@ -2697,8 +3173,8 @@ def purchase_membership():
         membership_due = ist_now() + timedelta(days=365)
         
         cursor.execute(
-            """
-            UPDATE Customer
+            f"""
+            UPDATE {tables['customer']}
             SET membership = 1, membershipDueDate = %s, loyaltyTier = 2
             WHERE customerID = %s
             """,
@@ -2711,7 +3187,12 @@ def purchase_membership():
             "INSERT",
             "Payment",
             payment_id,
-            {"amount": membership_amount, "paymentMode": db_payment_mode, "paymentFor": "Membership"},
+            {
+                "amount": membership_amount,
+                "paymentMode": db_payment_mode,
+                "paymentFor": "Membership",
+                "shardTable": tables["payment"],
+            },
         )
         
         write_audit_log(
@@ -2720,9 +3201,16 @@ def purchase_membership():
             "UPDATE",
             "Customer",
             member_id,
-            {"membership": 1, "membershipDueDate": membership_due.isoformat(), "loyaltyTier": 2, "discountPercent": 5},
+            {
+                "membership": 1,
+                "membershipDueDate": membership_due.isoformat(),
+                "loyaltyTier": 2,
+                "discountPercent": 5,
+                "shardTable": tables["customer"],
+            },
         )
 
+        shard_connection.commit()
         connection.commit()
         close_request_connection()
         return json_response(
@@ -2737,11 +3225,16 @@ def purchase_membership():
             message="Membership purchased successfully! You now have access to loyalty tier benefits.",
         )
     except (Error, RuntimeError) as exc:
+        if shard_connection and shard_connection.is_connected():
+            shard_connection.rollback()
         connection.rollback()
         close_request_connection()
         if isinstance(exc, RuntimeError):
             return json_response(status=409, message="Membership purchase is busy. Please retry.")
         return json_response(status=500, message=f"Database error: {exc}")
+    finally:
+        if shard_connection and shard_connection.is_connected():
+            shard_connection.close()
 
 
 @app.get("/api/delivery/assignments")
@@ -5573,6 +6066,111 @@ def admin_restore_delivery_partner(partner_id):
         connection.rollback()
         close_request_connection()
         return json_response(status=500, message=f"Database error: {exc}")
+
+
+@app.get("/api/sharded/shards")
+@require_roles("Admin")
+def list_shard_nodes():
+    try:
+        router = ShardRouter()
+        return json_response({"nodes": router.shard_summary(), "numShards": router.num_shards})
+    except (ShardRoutingError, Error, ValueError) as exc:
+        return json_response(status=500, message=f"Sharding configuration error: {exc}")
+    finally:
+        close_request_connection()
+
+
+@app.get("/api/sharded/route/customer/<int:customer_id>")
+@require_roles("Admin", "Customer")
+def get_customer_shard_route(customer_id):
+    current_user = request.current_user
+    if "Admin" not in current_user.get("roles", []) and current_user.get("memberID") != customer_id:
+        close_request_connection()
+        return json_response(status=403, message="You can only check your own customer shard route")
+
+    try:
+        router = ShardRouter()
+        shard_id = router.shard_for_customer(customer_id)
+        table_name = router.table_name("customer", shard_id)
+        return json_response(
+            {
+                "customerID": customer_id,
+                "shardID": shard_id,
+                "table": table_name,
+            }
+        )
+    except (ShardRoutingError, Error, ValueError) as exc:
+        return json_response(status=500, message=f"Sharding route error: {exc}")
+    finally:
+        close_request_connection()
+
+
+@app.post("/api/sharded/customers")
+@require_roles("Admin")
+def upsert_sharded_customer():
+    payload = request.get_json(silent=True) or {}
+    try:
+        router = ShardRouter()
+        result = router.upsert_customer(payload)
+        return json_response(status=201, message="Customer routed to shard successfully", data=result)
+    except ShardRoutingError as exc:
+        return json_response(status=400, message=str(exc))
+    except (Error, ValueError) as exc:
+        return json_response(status=500, message=f"Sharded insert failed: {exc}")
+    finally:
+        close_request_connection()
+
+
+@app.get("/api/sharded/customers/<int:customer_id>")
+@require_roles("Admin", "Customer")
+def get_sharded_customer(customer_id):
+    current_user = request.current_user
+    if "Admin" not in current_user.get("roles", []) and current_user.get("memberID") != customer_id:
+        close_request_connection()
+        return json_response(status=403, message="You can only read your own customer record")
+
+    try:
+        router = ShardRouter()
+        row = router.get_customer(customer_id)
+        if not row:
+            return json_response(status=404, message="Customer not found in shards")
+        return json_response(row)
+    except ShardRoutingError as exc:
+        return json_response(status=400, message=str(exc))
+    except (Error, ValueError) as exc:
+        return json_response(status=500, message=f"Sharded lookup failed: {exc}")
+    finally:
+        close_request_connection()
+
+
+@app.get("/api/sharded/customers/range")
+@require_roles("Admin")
+def get_sharded_customers_range():
+    start_customer_id = request.args.get("start", type=int)
+    end_customer_id = request.args.get("end", type=int)
+    limit = request.args.get("limit", default=1000, type=int)
+
+    if start_customer_id is None or end_customer_id is None:
+        close_request_connection()
+        return json_response(status=400, message="Query parameters 'start' and 'end' are required")
+
+    try:
+        router = ShardRouter()
+        rows = router.get_customers_in_range(start_customer_id, end_customer_id, limit=limit)
+        return json_response(
+            {
+                "count": len(rows),
+                "start": start_customer_id,
+                "end": end_customer_id,
+                "rows": rows,
+            }
+        )
+    except ShardRoutingError as exc:
+        return json_response(status=400, message=str(exc))
+    except (Error, ValueError) as exc:
+        return json_response(status=500, message=f"Sharded range query failed: {exc}")
+    finally:
+        close_request_connection()
 
 
 @app.get("/api/admin/audits")

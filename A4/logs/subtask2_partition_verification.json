@@ -1,0 +1,134 @@
+{
+  "source": {
+    "host": "127.0.0.1",
+    "port": 3306,
+    "user": "qb_admin",
+    "password": "qb_admin@123",
+    "database": "QB"
+  },
+  "shards": [
+    {
+      "shardID": 0,
+      "host": "10.0.116.184",
+      "port": 3307,
+      "database": "ScaleOps",
+      "user": "ScaleOps"
+    },
+    {
+      "shardID": 1,
+      "host": "10.0.116.184",
+      "port": 3308,
+      "database": "ScaleOps",
+      "user": "ScaleOps"
+    },
+    {
+      "shardID": 2,
+      "host": "10.0.116.184",
+      "port": 3309,
+      "database": "ScaleOps",
+      "user": "ScaleOps"
+    }
+  ],
+  "tables": {
+    "customer": {
+      "sourceCount": 10,
+      "shardCounts": {
+        "0": 3,
+        "1": 4,
+        "2": 3
+      },
+      "shardTotal": 10,
+      "badRouteCount": 0,
+      "missingKeyCount": 0,
+      "extraKeyCount": 0,
+      "crossShardDuplicateKeyCount": 0,
+      "sampleMissingKeys": [],
+      "sampleExtraKeys": [],
+      "sampleDuplicateKeys": [],
+      "okDesignatedSubset": true,
+      "okNoLossOrDuplication": true,
+      "ok": true
+    },
+    "address": {
+      "sourceCount": 20,
+      "shardCounts": {
+        "0": 6,
+        "1": 8,
+        "2": 6
+      },
+      "shardTotal": 20,
+      "badRouteCount": 0,
+      "missingKeyCount": 0,
+      "extraKeyCount": 0,
+      "crossShardDuplicateKeyCount": 0,
+      "sampleMissingKeys": [],
+      "sampleExtraKeys": [],
+      "sampleDuplicateKeys": [],
+      "okDesignatedSubset": true,
+      "okNoLossOrDuplication": true,
+      "ok": true
+    },
+    "cartitem": {
+      "sourceCount": 12,
+      "shardCounts": {
+        "0": 4,
+        "1": 5,
+        "2": 3
+      },
+      "shardTotal": 12,
+      "badRouteCount": 0,
+      "missingKeyCount": 0,
+      "extraKeyCount": 0,
+      "crossShardDuplicateKeyCount": 0,
+      "sampleMissingKeys": [],
+      "sampleExtraKeys": [],
+      "sampleDuplicateKeys": [],
+      "okDesignatedSubset": true,
+      "okNoLossOrDuplication": true,
+      "ok": true
+    },
+    "payment": {
+      "sourceCount": 12,
+      "shardCounts": {
+        "0": 4,
+        "1": 5,
+        "2": 3
+      },
+      "shardTotal": 12,
+      "badRouteCount": 0,
+      "missingKeyCount": 0,
+      "extraKeyCount": 0,
+      "crossShardDuplicateKeyCount": 0,
+      "sampleMissingKeys": [],
+      "sampleExtraKeys": [],
+      "sampleDuplicateKeys": [],
+      "okDesignatedSubset": true,
+      "okNoLossOrDuplication": true,
+      "ok": true
+    },
+    "orders": {
+      "sourceCount": 12,
+      "shardCounts": {
+        "0": 4,
+        "1": 5,
+        "2": 3
+      },
+      "shardTotal": 12,
+      "badRouteCount": 0,
+      "missingKeyCount": 0,
+      "extraKeyCount": 0,
+      "crossShardDuplicateKeyCount": 0,
+      "sampleMissingKeys": [],
+      "sampleExtraKeys": [],
+      "sampleDuplicateKeys": [],
+      "okDesignatedSubset": true,
+      "okNoLossOrDuplication": true,
+      "ok": true
+    }
+  },
+  "checks": {
+    "designatedSubset": "Each shard contains only rows routed to that shard",
+    "noLossOrDuplication": "No missing keys, no extra keys, no cross-shard duplicate keys"
+  },
+  "ok": true
+}

@@ -1,0 +1,349 @@
+\documentclass[12pt,a4paper]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{hyperref}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{amsmath}
+\usepackage{xcolor}
+\usepackage{setspace}
+\usepackage{verbatim}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue!50!black,
+  urlcolor=blue!50!black,
+  citecolor=blue!50!black
+}
+
+\setlength{\emergencystretch}{2em}
+\setlength{\parskip}{6pt}
+\setlength{\parindent}{0pt}
+\sloppy
+
+\title{QuickBites Assignment 4: Sharding Design and Evaluation Report}
+\author{Team ScaleOps}
+\date{17 April 2026}
+
+\begin{document}
+
+\begin{titlepage}
+\centering
+\vspace*{1.8cm}
+{\fontsize{22}{26}\selectfont \textbf{QuickBites}}\\[0.4cm]
+{\Large Assignment 4 Report}\\[0.2cm]
+{\large Sharding Design and Evaluation}\\[1.6cm]
+
+\begin{tabular}{ll}
+Course: & CS 432 Databases \\
+Team: & ScaleOps \\
+Submission Date: & 17 April 2026 \\
+\end{tabular}
+
+\vspace{1.4cm}
+
+\begin{minipage}{0.9\textwidth}
+\textbf{Repository:} \href{https://github.com/mohit-codes-21/QuickBites}{https://github.com/mohit-codes-21/QuickBites}\\
+\textbf{Video:} \href{https://drive.google.com/file/d/11_qTASPAAZiH_r3rJKdd1T1OuKAl3c3_/view?usp=sharing}{Project Demonstration Link}
+\end{minipage}
+
+\vfill
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+\section{Executive Summary}
+
+This report documents the sharding design implemented for QuickBites in Assignment 4.
+The system uses hash-based sharding on \texttt{customerID} with three shard nodes.
+Customer-scoped tables are distributed across shards, while non-customer reference and
+operational tables remain in the local monolith database. Migration and verification were
+automated with dedicated scripts, and query routing was integrated into the Flask backend.
+Validation includes migration integrity checks and API-level integration tests for point
+routing and cross-shard range queries.
+
+\section{Shard Key Chosen and Justification}
+
+\subsection{Selected Shard Key}
+
+The selected shard key is \texttt{customerID}.
+
+\subsection{Justification Against Selection Criteria}
+
+\textbf{High cardinality:}
+\texttt{customerID} is unique per customer, so distinct key count scales with user growth.
+This supports balanced partitioning under hash routing.
+
+\textbf{Query alignment:}
+Customer-facing workflows are keyed by customer context (cart, addresses, payments,
+customer orders). Routing by \texttt{customerID} keeps these operations single-shard in
+the common case.
+
+\textbf{Stability:}
+\texttt{customerID} is immutable after account creation. Immutable keys avoid row movement
+caused by key updates.
+
+\subsection{Skew Expectation}
+
+For the design-time seed analysis (from \texttt{sql/SQL\_Dump.sql}),
+customer IDs 1..10 map as: shard 0 = 3 rows (3,6,9),
+shard 1 = 4 rows (1,4,7,10), shard 2 = 3 rows (2,5,8).
+This indicates low initial skew. Under larger datasets,
+modulo-hash distribution is expected to stabilize further.
+
+\section{Partitioning Strategy Used and Why}
+
+\subsection{Strategy}
+
+QuickBites uses hash-based partitioning with:
+\[
+\texttt{shard\_id} = \texttt{customerID} \bmod 3
+\]
+
+\subsection{Rationale}
+
+\begin{itemize}[leftmargin=*]
+  \item Deterministic routing with constant-time lookup.
+  \item No directory service required.
+  \item Better write spread than simple range partitioning under sequential IDs.
+  \item Co-location of customer-scoped entities by key.
+\end{itemize}
+
+\subsection{Alternatives Considered}
+
+\begin{itemize}[leftmargin=*]
+  \item Range partitioning was not chosen due to potential growth hotspots.
+  \item Directory-based partitioning was not chosen due to added metadata complexity
+  and lookup overhead for this assignment scope.
+\end{itemize}
+
+\section{How Query Routing Is Implemented in the Application}
+
+\subsection{Routing Layer}
+
+Routing is implemented using:
+
+\begin{itemize}[leftmargin=*]
+  \item \texttt{shard\_router.py}
+  \item \texttt{ShardRouter.shard\_for\_customer(customer\_id)}
+  \item \texttt{ShardRouter.connect\_for\_customer(customer\_id)}
+  \item \texttt{ShardRouter.table\_name(logical\_table, shard\_id)}
+  \item \texttt{app/app.py}: \texttt{\_get\_customer\_shard\_context(customer\_id)}
+\end{itemize}
+
+\subsection{Table Routing Scope}
+
+Customer-key routed tables:
+\texttt{Customer}, \texttt{Address}, \texttt{CartItem}, \texttt{Payment}, \texttt{Orders}.
+
+Local-only tables:
+\texttt{Member}, \texttt{DeliveryPartner}, \texttt{Restaurant}, \texttt{MenuItem},
+\texttt{OrderItem}, \texttt{Delivery\_Assignments}, \texttt{OrderRating}, \texttt{MenuItemRating}.
+
+\subsection{Implemented Query Patterns}
+
+\textbf{Point routing:}
+\texttt{GET /api/sharded/route/customer/<customer\_id>} returns resolved shard and table.
+
+\textbf{Single-shard customer operations:}
+Examples include
+\texttt{GET /api/sharded/customers/<customer\_id>},
+\texttt{GET /api/customer/orders}, and
+\texttt{GET /api/customer/payments/last}.
+
+\textbf{Range fan-out query:}
+\texttt{GET /api/sharded/customers/range} with params
+\texttt{start}, \texttt{end}, \texttt{limit}.
+The backend queries each shard, merges rows, applies global sort, and returns a bounded
+result set.
+
+\subsection{Routing Validation Tests}
+
+Integration tests in \texttt{tests/check.py} validate:
+
+\begin{itemize}[leftmargin=*]
+  \item Correct shard chosen for point query routing.
+  \item Physical row presence on expected shard only.
+  \item Correct multi-shard range fan-out behavior.
+  \item Result equivalence with source \texttt{Customer} table for same bounds.
+\end{itemize}
+
+Latest execution status (\texttt{tests/check.py}): \texttt{Ran 2 tests ... OK}.
+An additional display-oriented runner \texttt{tests/check\_show.py} prints full
+records for point and range scenarios for demonstration screenshots.
+
+\section{Which SQL Shard Tables Were Created and How Data Was Migrated}
+
+\subsection{Physical Shard Tables Created}
+
+For each shard ID \{0,1,2\}, the following tables are created:
+
+\begin{itemize}[leftmargin=*]
+  \item \texttt{shard\_<id>\_customer}
+  \item \texttt{shard\_<id>\_address}
+  \item \texttt{shard\_<id>\_cartitem}
+  \item \texttt{shard\_<id>\_payment}
+  \item \texttt{shard\_<id>\_orders}
+\end{itemize}
+
+Total shard tables: 15.
+
+\subsection{Migration Workflow}
+
+Migration is implemented in \texttt{shard\_admin.py}:
+
+\begin{enumerate}[leftmargin=*]
+  \item \texttt{setup}: create shard tables on all nodes.
+  \item \texttt{migrate}: read rows from source \texttt{QB}, compute shard by
+  \texttt{customerID \% 3}, and insert into destination shard tables.
+  \item \texttt{verify}: validate counts, duplicate keys, and wrong-shard placement.
+\end{enumerate}
+
+\subsection{Migration Results}
+
+Source: \url{logs/subtask2_shard_report.json}
+
+Partition-integrity source: \url{logs/subtask2_partition_verification.json}
+
+Overall result: \texttt{ok = true}
+
+\textbf{Important note on counts.}
+The table below reflects verification after resetting source data from
+\texttt{sql/SQL\_Dump.sql} and rerunning shard migration.
+Observed counts match the seed baseline exactly:
+\texttt{Customer=10}, \texttt{Address=20}, \texttt{CartItem=12},
+\texttt{Payment=12}, \texttt{Orders=12}.
+
+\begin{center}
+\begin{tabular}{>{\raggedright\arraybackslash}p{2.1cm} >{\centering\arraybackslash}p{1.8cm} >{\centering\arraybackslash}p{3.0cm} >{\centering\arraybackslash}p{1.2cm} >{\centering\arraybackslash}p{1.8cm} >{\centering\arraybackslash}p{1.4cm}}
+\toprule
+Table & Source & Shard Counts (0/1/2) & Delta & Duplicate Keys & Bad Route \\
+\midrule
+customer & 10 & 3 / 4 / 3 & 0 & 0 & 0 \\
+address  & 20 & 6 / 8 / 6 & 0 & 0 & 0 \\
+cartitem & 12 & 4 / 5 / 3 & 0 & 0 & 0 \\
+payment  & 12 & 4 / 5 / 3 & 0 & 0 & 0 \\
+orders   & 12 & 4 / 5 / 3 & 0 & 0 & 0 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Conclusion: no loss, no duplication, and no wrong-shard placement for migrated sharded tables.
+
+\section{Sharding Approach Used and How Shard Isolation Was Achieved}
+
+\subsection{Approach Used}
+
+This implementation uses multiple MySQL instances/databases (not Dockerized shards).
+
+\begin{itemize}[leftmargin=*]
+  \item Source monolith: \texttt{127.0.0.1:3306} (DB: \texttt{QB})
+  \item Shard 0: \texttt{10.0.116.184:3307} (DB: \texttt{ScaleOps})
+  \item Shard 1: \texttt{10.0.116.184:3308} (DB: \texttt{ScaleOps})
+  \item Shard 2: \texttt{10.0.116.184:3309} (DB: \texttt{ScaleOps})
+\end{itemize}
+
+\subsection{Shard Isolation Mechanisms}
+
+\begin{enumerate}[leftmargin=*]
+  \item Connection isolation: each request is routed to an explicit shard connection.
+  \item Physical table isolation: shard-local table namespaces prevent overlap.
+  \item Deterministic ownership: each row maps to one shard using hash modulo.
+  \item Verification isolation checks: migration verification detects duplicates and
+  wrong placement across shards.
+\end{enumerate}
+
+\section{Results of the Scalability and Trade-offs Analysis}
+
+\subsection{Distribution and Skew}
+
+Using migrated counts:
+
+\textbf{Customer skew coefficient}
+\[
+\text{skew}_{customer} = \frac{\max(3,4,3)}{(10/3)} = \frac{4}{3.33} \approx 1.20
+\]
+
+\textbf{Orders skew coefficient}
+\[
+\text{skew}_{orders} = \frac{\max(4,5,3)}{(12/3)} = \frac{5}{4} = 1.25
+\]
+
+Interpretation:
+customer and order distributions are reasonably balanced under hash routing,
+with mild skew expected from small sample sizes.
+
+\subsection{Query Behavior Under Scale}
+
+\begin{itemize}[leftmargin=*]
+  \item Point customer queries scale efficiently since they hit one shard only.
+  \item Range queries scale as fan-out operations and require merge-sort in app layer.
+  \item A dedicated benchmark script (\texttt{app/benchmark\_indexing.py}) is available
+  for index-impact analysis on customer/order/payment access patterns.
+\end{itemize}
+
+\subsection{Trade-offs}
+
+\textbf{Advantages}
+\begin{itemize}[leftmargin=*]
+  \item Fast deterministic routing.
+  \item Reduced contention for customer-scoped traffic.
+  \item Clear operational mapping from key to shard.
+\end{itemize}
+
+\textbf{Costs}
+\begin{itemize}[leftmargin=*]
+  \item Fan-out overhead for range and global analytics queries.
+  \item Hotspot risk from uneven customer activity.
+  \item Additional operational overhead versus single-database deployment.
+\end{itemize}
+
+\section{Observations and Limitations}
+
+\subsection{Observations}
+
+\begin{itemize}[leftmargin=*]
+  \item Query routing, migration, and verification are integrated end-to-end.
+  \item Migration checks currently report full correctness for sharded table scope.
+  \item Routing test cases demonstrate both required behaviors: correct point routing and
+  correct multi-shard range fan-out.
+\end{itemize}
+
+\subsection{Limitations}
+
+\begin{itemize}[leftmargin=*]
+  \item Only direct \texttt{customerID}-routed tables are physically sharded.
+  \item Local tables are still required for non-customer-centric workflows.
+  \item No automated rebalancing/resharding policy is implemented.
+  \item Fan-out query cost grows with shard count and result-set width.
+\end{itemize}
+
+\section{Conclusion}
+
+QuickBites now has a working sharding implementation based on
+\texttt{customerID} hash partitioning across three shard nodes.
+The design includes deterministic routing, isolated shard tables,
+automated migration, and correctness verification.
+Measured results show balanced customer distribution with known
+mild skew in order volume, and expected trade-offs between
+single-shard efficiency and multi-shard fan-out costs.
+
+\appendix
+\section{Reproducibility Commands}
+
+\begin{verbatim}
+./.venv/bin/python shard_admin.py setup --drop-existing
+./.venv/bin/python shard_admin.py migrate
+./.venv/bin/python shard_admin.py verify
+./.venv/bin/python verify_partition_integrity.py
+
+./.venv/bin/python -m unittest tests/check.py -v
+./.venv/bin/python tests/check_show.py
+\end{verbatim}
+
+\end{document}
