@@ -54,7 +54,7 @@ Submission Date: & 18 April 2026 \\
   \midrule
   Bhavya Parmar & Subtask 4\\
   Surriya Gokul &  Subtask 1\\
-  Sonagiri Thoshith Kautilya &  Report and video\\
+  Sonagiri Thoshith Kautilya &  Subtask 1 \& Report\\
   Tanishq Chaudhari & Subtask 2 \& 3\\
   Mohit & Subtask 2 \& 3\\
   \bottomrule
@@ -65,7 +65,7 @@ Submission Date: & 18 April 2026 \\
 
 \begin{minipage}{0.9\textwidth}
 \textbf{Repository:} \href{https://github.com/mohit-codes-21/QuickBites}{https://github.com/mohit-codes-21/QuickBites}\\
-\textbf{Video:} \href{https://drive.google.com/file/d/11_qTASPAAZiH_r3rJKdd1T1OuKAl3c3_/view?usp=sharing}{Project Demonstration Link}
+\textbf{Video:} \href{https://drive.google.com/file/d/1e2TOupRxlVEyKsvpMLmblW_UvzhAfaY6/view?usp=sharing}{Project Demonstration Link}
 \end{minipage}
 
 \vfill
@@ -335,6 +335,12 @@ order lookups) typically touch one shard and therefore benefit from distributed
 load. In contrast, range queries require scatter-gather across shards and add
 application-side merge overhead.
 
+In practice, this creates two clear query classes in our system:
+single-shard customer queries with low coordination cost, and multi-shard
+administrative/analytic queries with higher merge and sorting overhead.
+As shard count increases, the first class scales well, while the second class
+needs careful limit controls and query planning.
+
 \subsection{Consistency}
 
 Within a single shard, transaction behavior follows MySQL ACID semantics. However,
@@ -353,6 +359,10 @@ For assignment scope, this is acceptable because dominant customer operations ar
 single-shard, but it highlights that strict global serializability is not guaranteed
 without additional coordination.
 
+For this reason, our implementation follows an application-level consistency model:
+customer-facing paths are optimized for shard-local correctness, while cross-shard
+views are treated as eventually aligned snapshots over the queried shards.
+
 \subsection{Availability}
 
 Sharding improves overall service availability under partial load because unaffected
@@ -367,6 +377,10 @@ Operationally, this trades complete outage risk for partial outage risk:
   \item Reduced blast radius compared with single-node failure.
   \item Need for shard-aware error handling and user-facing degraded-mode responses.
 \end{itemize}
+
+Therefore, availability is improved at system level but becomes key-dependent:
+service quality for a request depends on whether the request's shard set is healthy.
+This is an expected operational characteristic of shared-nothing sharded systems.
 
 \subsection{Partition Tolerance (Simulated Shard Failure)}
 
@@ -386,6 +400,10 @@ This behavior reflects a practical CAP trade-off: during partition events, the
 system prioritizes correctness of returned data for reachable shards over pretending
 full-cluster completeness.
 
+For future hardening, this can be extended with explicit partial-result contracts,
+retry/backoff for transient shard failures, and health-aware routing decisions
+that separate temporary network faults from persistent shard outages.
+
 \subsection{SubTask 4 Summary}
 
 The implemented sharding design demonstrates clear horizontal scaling benefits for
@@ -393,6 +411,10 @@ customer-keyed traffic, with expected trade-offs in global consistency guarantee
 failure handling complexity, and fan-out query cost. These outcomes are consistent
 with standard distributed-database behavior and align with the assignment's required
 analysis dimensions.
+
+Overall, SubTask 4 confirms that our architecture is effective for workload
+locality around \texttt{customerID}, while also making the operational trade-offs
+explicit for scale growth, fault handling, and cross-shard query patterns.
 
 \section{Observations and Limitations}
 
